@@ -4,37 +4,43 @@ import React, { useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Icons } from '@/components/ui/icons';
-import { store } from '@/lib/store';
 
 function GatewaySimulationContent() {
   const searchParams = useSearchParams();
 
-  const paymentId = searchParams.get('paymentId') || 'pay_demo_1';
   const amount = searchParams.get('amount') || '22000';
   const ref = searchParams.get('ref') || 'FLOUCI-REF-9982';
-  const bookId = searchParams.get('bookId') || 'book_math_9b';
+  const providerParam = searchParams.get('provider');
+  const provider: 'FLOUCI' | 'KONNECT' | 'GPG' =
+    providerParam === 'KONNECT' || providerParam === 'GPG' ? providerParam : 'FLOUCI';
 
   const [status, setStatus] = useState<'PENDING' | 'CONFIRMING' | 'SUCCESS' | 'CANCELLED'>('PENDING');
 
   const formatDT = (m: string) => (parseInt(m, 10) / 1000).toFixed(3) + ' DT';
 
-  const handleSimulatePayment = (success: boolean) => {
-    if (!success) {
-      setStatus('CANCELLED');
-      return;
-    }
-
+  const handleSimulatePayment = async (success: boolean) => {
     setStatus('CONFIRMING');
-    setTimeout(() => {
-      // Execute atomic checkout in store
-      store.processCheckout({
-        userId: store.currentUserId,
-        bookIds: [bookId],
-        paymentProvider: 'FLOUCI',
-        idempotencyKey: `idemp_gw_${Date.now()}_${paymentId}`,
+    try {
+      // Server-side simulation: the HMAC secret never reaches the browser.
+      const res = await fetch('/api/payments/simulate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider,
+          providerReference: ref,
+          status: success ? 'SUCCEEDED' : 'FAILED',
+          amountMillimes: parseInt(amount, 10),
+          currency: 'TND',
+        }),
       });
-      setStatus('SUCCESS');
-    }, 1000);
+      if (res.ok || success === false) {
+        setStatus(success ? 'SUCCESS' : 'CANCELLED');
+      } else {
+        setStatus('CANCELLED');
+      }
+    } catch {
+      setStatus('CANCELLED');
+    }
   };
 
   return (
@@ -116,7 +122,7 @@ function GatewaySimulationContent() {
             Transaction Validée & Droit d&apos;Accès Octroyé
           </h3>
           <p className="text-xs text-slate-500">
-            L&apos;écriture comptable a été enregistrée dans le grand livre avec reversement de 90% à l&apos;auteur.
+            L&apos;écriture comptable a été enregistrée dans le grand livre avec reversement de 80% à l&apos;auteur.
           </p>
           <Link
             href="/student/library"

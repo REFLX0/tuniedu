@@ -16,6 +16,10 @@ export function SubjectFilter({ selectedSubject, onSelectSubject }: SubjectFilte
     { id: 'subj_math', labelFr: 'Mathématiques', labelAr: 'الرياضيات' },
     { id: 'subj_phys', labelFr: 'Sciences Physiques', labelAr: 'العلوم الفيزيائية' },
     { id: 'subj_svt', labelFr: 'SVT', labelAr: 'علوم الحياة والأرض' },
+    { id: 'subj_info', labelFr: 'Informatique & Algorithmique', labelAr: 'الإعلامية والخوارزميات' },
+    { id: 'subj_eco', labelFr: 'Économie & Gestion', labelAr: 'الاقتصاد والتصرف' },
+    { id: 'subj_philo', labelFr: 'Philosophie', labelAr: 'الفلسفة' },
+    { id: 'subj_eveil', labelFr: 'Éveil Scientifique', labelAr: 'الإيقاظ العلمي' },
     { id: 'subj_ara', labelFr: 'Langue Arabe', labelAr: 'اللغة العربية' },
     { id: 'subj_fra', labelFr: 'Langue Française', labelAr: 'اللغة الفرنسية' },
   ];

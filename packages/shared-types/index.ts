@@ -135,3 +135,160 @@ export interface ExerciseCorrectionDTO {
   solution: string;
   explanationFr: string;
 }
+
+// =============================================================================
+// PHASE 3 — VIDEO STREAMING TYPES
+// =============================================================================
+
+export type VideoResolution = '1080p' | '720p' | '480p' | '360p';
+
+export interface VideoContentDTO {
+  id: string;
+  bookId: string;
+  chapterId?: string;
+  professorId: string;
+  professorName?: string;
+  title: string;
+  titleAr?: string | null;
+  description?: string | null;
+  durationSeconds: number;
+  isFreePreview: boolean;
+  thumbnailUrl: string;
+  masterPlaylistUrl: string;
+  createdAt: string;
+}
+
+// =============================================================================
+// PHASE 4 — LIVE STREAMING TYPES
+// =============================================================================
+
+export type LiveStatus = 'SCHEDULED' | 'LIVE' | 'ENDED' | 'CANCELLED';
+
+export interface LiveSessionDTO {
+  id: string;
+  bookId: string;
+  bookTitle?: string;
+  professorId: string;
+  professorName: string;
+  title: string;
+  titleAr?: string | null;
+  description?: string | null;
+  scheduledAt: string; // ISO UTC (Africa/Tunis time)
+  startedAt?: string | null;
+  endedAt?: string | null;
+  estimatedDurationMinutes: number;
+  status: LiveStatus;
+  priceMillimes: number; // Single session ticket (or free if trimester purchased)
+  isFreeForTrimesterStudents: boolean;
+  replayVideoId?: string | null;
+  viewerCount?: number;
+}
+
+export interface LiveChatMessageDTO {
+  id: string;
+  liveSessionId: string;
+  userId: string;
+  userName: string;
+  userRole: UserRole;
+  message: string;
+  isQuestion: boolean;
+  isPinned: boolean;
+  createdAt: string;
+}
+
+// =============================================================================
+// PHASE 5 — AI PERSONAL TUTOR & TEACHER VALIDATION TYPES
+// =============================================================================
+
+export type AiMessageRole = 'user' | 'assistant' | 'system';
+
+export type AiCorrectionStatus = 'PENDING_REVIEW' | 'APPROVED' | 'EDITED' | 'REJECTED';
+
+export interface AiChatMessageDTO {
+  id: string;
+  role: AiMessageRole;
+  content: string;
+  pedagogicalRationale?: string | null; // "Why are we learning this?" contextual explanation
+  suggestedQuestions?: string[];
+  simplifiedLevel?: 'PRIMAIRE' | 'COLLEGE' | 'LYCEE' | 'BAC';
+  language?: 'fr' | 'ar' | 'bilingual';
+  createdAt: string;
+}
+
+export interface AiCorrectionProposalDTO {
+  id: string;
+  exerciseId: string;
+  exercisePrompt: string;
+  chapterTitle: string;
+  bookTitle: string;
+  studentId: string;
+  studentName: string;
+  studentAnswer: string;
+  aiProposedSolution: string;
+  aiExplanation: string;
+  aiConfidence: number; // 0.0 - 1.0
+  curriculumMethodWarning?: string | null; // e.g. "AI used matrices not in 3ème Math official syllabus"
+  status: AiCorrectionStatus;
+  teacherId?: string | null;
+  teacherNotes?: string | null;
+  teacherEditedSolution?: string | null;
+  createdAt: string;
+  reviewedAt?: string | null;
+}
+
+// =============================================================================
+// PHASE 6 — TRIMESTER QUOTAS & MODULAR PRICING TYPES
+// =============================================================================
+
+export type TrimesterCode = 'T1' | 'T2' | 'T3' | 'ANNUAL';
+
+export interface TrimesterDTO {
+  id: string;
+  code: TrimesterCode;
+  nameFr: string;
+  nameAr?: string | null;
+  academicYearId: string;
+  startsAt: string; // ISO UTC
+  endsAt: string;   // ISO UTC (Africa/Tunis snapshot)
+  isActive: boolean;
+}
+
+export type BookPurchaseOption = 'BOOK_ONLY' | 'TRIMESTER_BUNDLE' | 'ANNUAL_PASS';
+
+export interface BookTrimesterPricingDTO {
+  bookId: string;
+  trimesterCode: TrimesterCode;
+  bookOnlyPriceMillimes: number;      // e.g. 15,000 DT
+  bundlePriceMillimes: number;        // Includes book + videos + lives (e.g. 35,000 DT)
+  annualPassPriceMillimes: number;    // All 3 trimesters discounted (e.g. 85,000 DT)
+}
+
+// =============================================================================
+// PHASE 7 — PARENTAL SPACE & STUDENT ANALYTICS TYPES
+// =============================================================================
+
+export interface ChildProgressSummaryDTO {
+  childId: string;
+  childName: string;
+  avatar?: string;
+  levelCode: string;
+  levelNameFr: string;
+  totalStudyMinutes: number;
+  exercisesCompleted: number;
+  exerciseAccuracyPercentage: number;
+  activeBooksCount: number;
+  liveSessionsAttended: number;
+  aiTutorQuestionsAsked: number;
+  strengths: string[];
+  areasForImprovement: string[];
+  recentActivities: Array<{
+    id: string;
+    date: string;
+    type: 'EXERCISE' | 'VIDEO' | 'LIVE' | 'READING' | 'AI_SESSION';
+    title: string;
+    subject: string;
+    score?: number;
+    details?: string;
+  }>;
+}
+

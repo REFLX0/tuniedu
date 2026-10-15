@@ -19,7 +19,6 @@ export function ExerciseRenderer({
   hasAccess,
   onAttemptSubmitted,
   nextExerciseId,
-  bookId,
 }: ExerciseRendererProps) {
   const { lang, isRtl } = useLanguage();
   const [selectedOption, setSelectedOption] = useState<string>('');

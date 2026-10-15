@@ -67,7 +67,7 @@ export function runSecurityAcceptanceTests(): TestResult[] {
     priceMillimes: 1, // Malicious client attempt
   };
   const sec04Validation = validateCheckout(rawClientPayload);
-  const priceIgnored = sec04Validation.success && !('priceMillimes' in (sec04Validation.data as any));
+  const priceIgnored = !!(sec04Validation.success && sec04Validation.data && !('priceMillimes' in (sec04Validation.data as unknown as Record<string, unknown>)));
   results.push({
     id: 'SEC-04',
     name: 'Student changes priceMillimes in checkout request',

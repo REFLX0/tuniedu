@@ -14,7 +14,7 @@ interface BookPreviewModalProps {
 }
 
 export function BookPreviewModal({ book, isOpen, onClose, hasAccess }: BookPreviewModalProps) {
-  const { lang, isRtl } = useLanguage();
+  const { lang } = useLanguage();
 
   if (!isOpen || !book) return null;
 

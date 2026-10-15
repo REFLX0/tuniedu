@@ -4,12 +4,12 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { store } from '@/lib/store';
 import { useLanguage } from '@/lib/language-context';
+import { AiTutorFloatingDrawer } from '@/components/ai/AiTutorFloatingDrawer';
 import { Icons } from '@/components/ui/icons';
 
 export default function StudentLibraryPage() {
-  const { lang, isRtl } = useLanguage();
+  const { lang } = useLanguage();
   const currentUserId = store.currentUserId;
-  const user = store.getCurrentUser();
   const [nowIso, setNowIso] = useState('2026-10-12T12:00:00.000Z');
   const [filterSubject, setFilterSubject] = useState<string>('ALL');
 
@@ -90,6 +90,61 @@ export default function StudentLibraryPage() {
             {lang === 'ar' ? 'تقدمي' : 'Mes Progrès'}
           </Link>
         </div>
+      </div>
+
+      {/* Multimodal Educational Formats Hub Banner */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-blue-50/80 border border-blue-200 rounded-2xl p-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center text-lg shadow-sm">
+              📚
+            </span>
+            <div>
+              <h4 className="font-bold text-xs text-blue-950">Manuels Scolaires</h4>
+              <p className="text-[11px] text-blue-700">Lecture protégée & exercices</p>
+            </div>
+          </div>
+          <span className="text-xs font-bold text-blue-600">Actif ✓</span>
+        </div>
+
+        <Link
+          href="/student/videos/vid_thal_9b"
+          className="bg-white border border-slate-200 hover:border-blue-400 hover:bg-blue-50/40 rounded-2xl p-4 flex items-center justify-between transition-all shadow-xs group"
+        >
+          <div className="flex items-center gap-3">
+            <span className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center text-lg shadow-sm group-hover:bg-blue-600 transition-colors">
+              🎬
+            </span>
+            <div>
+              <h4 className="font-bold text-xs text-slate-900 group-hover:text-blue-700 transition-colors">
+                Cours Vidéos HLS
+              </h4>
+              <p className="text-[11px] text-slate-500">Explications au tableau</p>
+            </div>
+          </div>
+          <span className="text-xs font-bold text-blue-600 group-hover:translate-x-0.5 transition-transform">→</span>
+        </Link>
+
+        <Link
+          href="/student/live"
+          className="bg-white border border-slate-200 hover:border-red-400 hover:bg-red-50/30 rounded-2xl p-4 flex items-center justify-between transition-all shadow-xs group"
+        >
+          <div className="flex items-center gap-3">
+            <span className="w-10 h-10 rounded-xl bg-red-600 text-white flex items-center justify-center text-lg shadow-sm shadow-red-600/30">
+              🔴
+            </span>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <h4 className="font-bold text-xs text-slate-900 group-hover:text-red-700 transition-colors">
+                  Séances en Direct
+                </h4>
+                <span className="w-2 h-2 rounded-full bg-red-600 animate-pulse" />
+              </div>
+              <p className="text-[11px] text-slate-500">Chat & questions en temps réel</p>
+            </div>
+          </div>
+          <span className="text-xs font-bold text-red-600 group-hover:translate-x-0.5 transition-transform">→</span>
+        </Link>
       </div>
 
       {/* Subject Filter Tabs */}
@@ -241,6 +296,12 @@ export default function StudentLibraryPage() {
           </Link>
         </div>
       )}
+
+      {/* Floating AI Tutor Personal Assistant */}
+      <AiTutorFloatingDrawer
+        levelStage="COLLEGE"
+        levelCode="lvl_9b"
+      />
     </div>
   );
 }

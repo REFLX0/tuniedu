@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { store } from '@/lib/store';
+import { store, type Exercise } from '@/lib/store';
+import { requireApiSession } from '@/lib/auth';
 
 export async function POST(
   req: NextRequest,
@@ -10,10 +11,12 @@ export async function POST(
     const body = await req.json();
     const { answer } = body;
 
-    const userId = req.headers.get('x-user-id') || store.currentUserId;
+    const auth = await requireApiSession(req);
+    if (auth.errorResponse) return auth.errorResponse;
+    const userId = auth.user.id;
 
     // Locate exercise
-    let targetEx: any;
+    let targetEx: Exercise | undefined;
     let targetBookId = '';
     for (const b of store.books) {
       for (const ch of b.chapters) {
@@ -50,7 +53,7 @@ export async function POST(
         : null,
       accessRequiredToViewSolution: !hasAccess,
     });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err: unknown) {
+    return NextResponse.json({ error: (err instanceof Error ? err.message : '') }, { status: 500 });
   }
 }

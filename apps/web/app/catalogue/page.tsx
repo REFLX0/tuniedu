@@ -110,7 +110,7 @@ export default function CataloguePage() {
             <span className="text-slate-500">{lang === 'ar' ? 'ترتيب حسب :' : 'Trier par :'}</span>
             <select
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as any)}
+              onChange={(e) => setSortBy(e.target.value as 'RECOMMENDED' | 'PRICE_ASC' | 'PRICE_DESC' | 'PAGES')}
               className="py-1 px-2.5 rounded-lg border border-slate-300 text-xs text-slate-800 bg-white focus:outline-none focus:ring-1 focus:ring-blue-600 font-medium"
             >
               <option value="RECOMMENDED">{lang === 'ar' ? 'المقترحة للأسبوع' : 'Recommandés'}</option>
@@ -144,7 +144,7 @@ export default function CataloguePage() {
       {filteredBooks.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredBooks.map((book) => {
-            const hasAccess = store.hasActiveEntitlement(store.currentUserId, book.id);
+            const hasAccess = store.hasActiveEntitlement(store.getCurrentUser()?.id ?? '', book.id);
             return (
               <BookCard
                 key={book.id}
@@ -186,7 +186,7 @@ export default function CataloguePage() {
         book={previewBook}
         isOpen={Boolean(previewBook)}
         onClose={() => setPreviewBook(null)}
-        hasAccess={previewBook ? store.hasActiveEntitlement(store.currentUserId, previewBook.id) : false}
+        hasAccess={previewBook ? store.hasActiveEntitlement(store.getCurrentUser()?.id ?? '', previewBook.id) : false}
       />
     </div>
   );

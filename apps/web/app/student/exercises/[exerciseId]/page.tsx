@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import { store, Exercise } from '@/lib/store';
 import { useLanguage } from '@/lib/language-context';
 import { ExerciseRenderer } from '@/components/exercises/ExerciseRenderer';
+import { AiTutorFloatingDrawer } from '@/components/ai/AiTutorFloatingDrawer';
 import { Icons } from '@/components/ui/icons';
 
 export default function ExerciseDetailPage() {
@@ -53,11 +54,12 @@ export default function ExerciseDetailPage() {
     }
   }
 
-  const hasAccess = store.hasActiveEntitlement(store.currentUserId, targetBookId);
+  const currentUserId = store.getCurrentUser()?.id ?? '';
+  const hasAccess = store.hasActiveEntitlement(currentUserId, targetBookId);
 
-  const handleAttemptSubmitted = (answer: string, isCorrect: boolean) => {
-    if (targetExercise) {
-      store.submitExerciseAttempt(store.currentUserId, targetExercise.id, answer);
+  const handleAttemptSubmitted = (answer: string) => {
+    if (targetExercise && currentUserId) {
+      store.submitExerciseAttempt(currentUserId, targetExercise.id, answer);
     }
   };
 
@@ -121,6 +123,13 @@ export default function ExerciseDetailPage() {
         bookId={targetBookId}
         onAttemptSubmitted={handleAttemptSubmitted}
         nextExerciseId={nextExerciseId}
+      />
+
+      {/* Socratic AI Tutor Drawer for guided hints & curriculum validation */}
+      <AiTutorFloatingDrawer
+        bookId={targetBookId}
+        bookTitle={targetBookTitle}
+        chapterTitle={chapterTitle}
       />
     </div>
   );

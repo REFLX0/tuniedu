@@ -1,0 +1,19 @@
+{
+  "name": "@tuniedu/video-transcoding",
+  "version": "2.0.0",
+  "private": true,
+  "main": "index.ts",
+  "scripts": {
+    "start": "tsx index.ts"
+  },
+  "dependencies": {
+    "@tuniedu/shared-types": "*",
+    "bullmq": "^5.30.1",
+    "ioredis": "^5.4.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}

@@ -1,0 +1,4 @@
+# DEPLOYMENT (repeatable, but NOT production-ready)
+Current compose is a DEV topology: postgres:16-alpine, redis:7-alpine, chainguard minio, livekit server; bridge network; named volumes; healthchecks present; `version` attr obsolete; compose config renders.
+Blockers to any prod deploy: secrets in compose (.env.example pattern leaks into orchestration), no TLS/reverse proxy, no resource limits, no non-root/user hardening, no migration job/ordering, no rollback procedure, no staging/prod separation.
+Minimum safe sequence (staging-like, disposable): provision secrets via manager → `docker compose up -d postgres redis minio` → run `prisma migrate deploy` (migrations must first be authored — none exist) → seed ONLY disposable DB → smoke SEC suite → snapshot volumes. LiveKit only when needed. Never point seed/migrations at production.

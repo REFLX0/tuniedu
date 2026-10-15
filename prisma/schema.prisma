@@ -1,14 +1,21 @@
-// This is the production-ready Prisma schema for TuniEdu (Tunisian Education Platform)
-// Conforming to Version 1.0 specifications
+// =============================================================================
+// TuniEdu Production Prisma Schema — Version 2.0
+// PostgreSQL 16 · Africa/Tunis timezone · All monetary values in Millimes (Int)
+// =============================================================================
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextSearch", "relationJoins"]
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+// =============================================================================
+// ENUMS
+// =============================================================================
 
 enum UserRole {
   STUDENT
@@ -19,9 +26,10 @@ enum UserRole {
 }
 
 enum AccountStatus {
-  PENDING
+  PENDING_VERIFICATION
   ACTIVE
   SUSPENDED
+  BANNED
   DELETED
 }
 
@@ -39,6 +47,15 @@ enum BookStatus {
   PUBLISHED
   REJECTED
   ARCHIVED
+}
+
+enum ContentType {
+  PDF_COURSE
+  PDF_EXERCISES
+  VIDEO
+  LIVE_STREAM
+  EXERCISE_PACK
+  BUNDLE
 }
 
 enum ProcessingStatus {
@@ -88,6 +105,7 @@ enum ExerciseType {
   SHORT_TEXT
   LONG_TEXT
   FILE_UPLOAD
+  DRAWING
 }
 
 enum AttemptStatus {
@@ -122,30 +140,147 @@ enum LedgerEntryType {
   ADJUSTMENT
 }
 
-model User {
-  id              String        @id @default(cuid())
-  name            String
-  email           String?       @unique
-  phone           String?       @unique
-  passwordHash    String?
-  status          AccountStatus @default(PENDING)
-  locale          String        @default("fr")
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  deletedAt       DateTime?
+enum LiveStatus {
+  SCHEDULED
+  LIVE
+  ENDED
+  CANCELLED
+}
 
-  roles           UserRoleAssignment[]
-  professor       ProfessorProfile?
-  publishedBooks  Book[]        @relation("BookAuthor")
-  purchases       Purchase[]
-  entitlements    Entitlement[]
-  parentLinks     ParentChildLink[] @relation("ParentLinks")
-  childLinks      ParentChildLink[] @relation("ChildLinks")
-  studySessions   StudySession[]
-  attempts        ExerciseAttempt[]
-  auditEvents     AuditLog[]    @relation("AuditActor")
-  reviews         BookReview[]  @relation("ReviewAuthor")
-  notifications   Notification[]
+enum AiMode {
+  CHAT
+  HINT
+  CORRECTION
+  EXPLAIN_WHY
+  SIMPLIFY
+  EXAM_PREP
+}
+
+enum AiMessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+enum AiCorrectionStatus {
+  AUTO_APPROVED
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum SecurityEventType {
+  SCREENSHOT_ATTEMPT
+  COPY_ATTEMPT
+  DEVTOOLS_DETECTED
+  CONCURRENT_SESSION
+  IMPOSSIBLE_TRAVEL
+  BRUTE_FORCE
+  INVALID_TOKEN
+  ACCOUNT_SHARING_SUSPECTED
+  ACCOUNT_SHARING_CONFIRMED
+}
+
+enum EducationStage {
+  PRIMAIRE
+  COLLEGE
+  LYCEE
+  UNIVERSITE
+}
+
+// =============================================================================
+// LAYER 9 — CORE USER & AUTH MODELS
+// =============================================================================
+
+model User {
+  id                    String          @id @default(cuid())
+  name                  String
+  email                 String?         @unique
+  phone                 String?         @unique
+  // Argon2id hashed password — never stored plaintext
+  passwordHash          String?
+  status                AccountStatus   @default(PENDING_VERIFICATION)
+  locale                String          @default("fr")
+  avatarUrl             String?
+  // Child-specific field populated for minors
+  childPublicId         String?         @unique // format: TUN-XXXX
+  dateOfBirth           DateTime?
+  // Email / phone verification
+  emailVerifiedAt       DateTime?
+  phoneVerifiedAt       DateTime?
+  // Timestamps
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  deletedAt             DateTime?       // Soft delete — GDPR/INPDP
+
+  // Relations
+  roles                 UserRoleAssignment[]
+  professor             ProfessorProfile?
+  purchases             Purchase[]
+  entitlements          Entitlement[]
+  parentLinks           ParentChildLink[] @relation("ParentLinks")
+  childLinks            ParentChildLink[] @relation("ChildLinks")
+  studySessions         StudySession[]
+  attempts              ExerciseAttempt[]
+  auditEvents           AuditLog[]       @relation("AuditActor")
+  reviews               BookReview[]     @relation("ReviewAuthor")
+  notifications         Notification[]
+  sessions              UserSession[]
+  securityEvents        SecurityEvent[]
+  aiConversations       AiConversation[]
+  liveParticipations    LiveParticipant[]
+  chatMessages          LiveChatMessage[]
+  accounts              Account[]        // next-auth OAuth accounts
+
+  @@index([email])
+  @@index([phone])
+  @@index([childPublicId])
+  @@index([status, createdAt])
+}
+
+// next-auth v5 Account model (OAuth providers)
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+// Server-side session tracking (NOT next-auth sessions — used for account sharing detection)
+model UserSession {
+  id              String    @id @default(cuid())
+  userId          String
+  tokenHash       String    @unique  // SHA-256 of JWT jti — never store raw token
+  ipAddress       String?
+  userAgent       String?
+  countryCode     String?   // ISO 3166-1 alpha-2
+  cityName        String?
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  lastSeenAt      DateTime  @default(now())
+  expiresAt       DateTime
+  revokedAt       DateTime?
+  revokeReason    String?
+
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isActive])
+  @@index([tokenHash])
+  @@index([expiresAt])
+  @@index([userId, createdAt])
 }
 
 model UserRoleAssignment {
@@ -153,6 +288,8 @@ model UserRoleAssignment {
   userId    String
   role      UserRole
   createdAt DateTime @default(now())
+  grantedBy String?  // admin userId who granted the role
+
   user      User     @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   @@unique([userId, role])
@@ -163,10 +300,13 @@ model ProfessorProfile {
   id                 String          @id @default(cuid())
   userId             String          @unique
   displayName        String
-  biography          String?
+  biography          String?         @db.Text
+  specialization     String[]        // subject codes
   status             ProfessorStatus @default(PENDING)
   verifiedAt         DateTime?
-  payoutReference    String?
+  verifiedBy         String?         // admin userId
+  // RIB stored encrypted at application level — see INPDP compliance
+  payoutRibEncrypted String?
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @updatedAt
 
@@ -174,45 +314,84 @@ model ProfessorProfile {
   books              Book[]
   payouts            ProfessorPayout[]
   ledgerEntries      FinancialLedgerEntry[]
+  liveSessions       LiveSession[]
+  aiCorrectionReviews AiCorrectionProposal[] @relation("ReviewedBy")
+
+  @@index([status])
 }
 
+// =============================================================================
+// ACADEMIC STRUCTURE
+// =============================================================================
+
 model EducationLevel {
-  id          String   @id @default(cuid())
-  code        String   @unique
+  id          String         @id @default(cuid())
+  code        String         @unique // "1P", "9B", "BAC-M", etc.
   nameFr      String
-  nameAr      String?
-  stage       String
-  sortOrder   Int      @default(0)
-  isActive    Boolean  @default(true)
+  nameAr      String
+  stage       EducationStage
+  sortOrder   Int            @default(0)
+  isActive    Boolean        @default(true)
+  isConcours  Boolean        @default(false) // marks competitive exam years
+  concoursName String?       // "Concours Sixième", "Concours Neufième", "Baccalauréat"
 
   books       Book[]
 
   @@index([stage, sortOrder])
+  @@index([isActive])
 }
 
 model Subject {
   id          String   @id @default(cuid())
   code        String   @unique
   nameFr      String
-  nameAr      String?
+  nameAr      String
+  iconSlug    String?
   isActive    Boolean  @default(true)
 
   books       Book[]
 }
 
 model AcademicYear {
-  id          String   @id @default(cuid())
-  name        String   @unique
-  startsAt    DateTime
-  endsAt      DateTime
-  timezone    String   @default("Africa/Tunis")
-  isActive    Boolean  @default(false)
-  createdAt   DateTime @default(now())
+  id          String      @id @default(cuid())
+  name        String      @unique // "2026-2027"
+  startsAt    DateTime    // September 15
+  endsAt      DateTime    // June 30 23:59:59 Africa/Tunis
+  timezone    String      @default("Africa/Tunis")
+  isActive    Boolean     @default(false)
+  createdAt   DateTime    @default(now())
 
+  trimesters  Trimester[]
   entitlements Entitlement[]
 
   @@index([isActive])
 }
+
+// ── NEW V2: Trimester model ──────────────────────────────────────────────────
+model Trimester {
+  id             String      @id @default(cuid())
+  academicYearId String
+  number         Int         // 1 | 2 | 3
+  nameFr         String      // "Trimestre 1 — 2026/2027"
+  nameAr         String
+  startsAt       DateTime    // Africa/Tunis
+  endsAt         DateTime    // Africa/Tunis — strict snapshot for entitlements
+  timezone       String      @default("Africa/Tunis")
+  isActive       Boolean     @default(false)
+  isRegistrationOpen Boolean @default(false)
+
+  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Restrict)
+  entitlements   Entitlement[]
+  bookPricings   BookTrimesterPricing[]
+  liveSessions   LiveSession[]
+
+  @@unique([academicYearId, number])
+  @@index([isActive])
+}
+
+// =============================================================================
+// CONTENT MODELS
+// =============================================================================
 
 model Book {
   id                 String     @id @default(cuid())
@@ -220,33 +399,61 @@ model Book {
   educationLevelId   String
   subjectId          String
   title              String
+  titleAr            String?
   slug               String     @unique
-  description        String?
+  description        String?    @db.Text
+  descriptionAr      String?    @db.Text
   language           String     @default("fr")
   currency           String     @default("TND")
+  // Legacy annual price — kept for backward compat
   priceMillimes      Int
   status             BookStatus @default(DRAFT)
   coverObjectKey     String?
   currentVersionId   String?    @unique
+  tags               String[]
   createdAt          DateTime   @default(now())
   updatedAt          DateTime   @updatedAt
   publishedAt        DateTime?
   archivedAt         DateTime?
 
-  professor          ProfessorProfile @relation(fields: [professorId], references: [id], onDelete: Restrict)
-  educationLevel     EducationLevel @relation(fields: [educationLevelId], references: [id], onDelete: Restrict)
-  subject            Subject @relation(fields: [subjectId], references: [id], onDelete: Restrict)
-  versions           BookVersion[] @relation("BookVersions")
-  currentVersion     BookVersion? @relation("CurrentBookVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
+  professor          ProfessorProfile  @relation(fields: [professorId], references: [id], onDelete: Restrict)
+  educationLevel     EducationLevel    @relation(fields: [educationLevelId], references: [id], onDelete: Restrict)
+  subject            Subject           @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  versions           BookVersion[]     @relation("BookVersions")
+  currentVersion     BookVersion?      @relation("CurrentBookVersion", fields: [currentVersionId], references: [id], onDelete: SetNull)
   chapters           BookChapter[]
   purchaseItems      PurchaseItem[]
   entitlements       Entitlement[]
   reviews            BookReview[]
   studySessions      StudySession[]
+  trimesterPricings  BookTrimesterPricing[]
+  videoContents      VideoContent[]
+  liveSessions       LiveSession[]
+  aiConversations    AiConversation[]
 
   @@index([status, educationLevelId, subjectId])
   @@index([professorId, status])
   @@index([publishedAt])
+  @@index([slug])
+}
+
+// ── NEW V2: Trimester-based pricing ─────────────────────────────────────────
+model BookTrimesterPricing {
+  id              String     @id @default(cuid())
+  bookId          String
+  trimesterId     String?    // null = annual pricing
+  priceMillimes   Int
+  isAnnual        Boolean    @default(false)
+  // Annual discount: 15% off sum of 3 trimesters
+  annualDiscountBps Int      @default(1500)
+  isActive        Boolean    @default(true)
+  createdAt       DateTime   @default(now())
+
+  book            Book       @relation(fields: [bookId], references: [id], onDelete: Restrict)
+  trimester       Trimester? @relation(fields: [trimesterId], references: [id], onDelete: SetNull)
+
+  @@unique([bookId, trimesterId])
+  @@index([bookId, isActive])
 }
 
 model BookVersion {
@@ -257,7 +464,7 @@ model BookVersion {
   originalObjectKey  String
   checksumSha256     String?
   pageCount          Int?
-  processingError    String?
+  processingError    String?          @db.Text
   createdAt          DateTime         @default(now())
   readyAt            DateTime?
 
@@ -290,9 +497,11 @@ model BookChapter {
   bookId         String
   versionId      String
   title          String
+  titleAr        String?
   sortOrder      Int
   startPage      Int
   endPage        Int
+  aiContext      String?  @db.Text // Context given to AI for this chapter
 
   book           Book        @relation(fields: [bookId], references: [id], onDelete: Restrict)
   version        BookVersion @relation(fields: [versionId], references: [id], onDelete: Restrict)
@@ -303,24 +512,239 @@ model BookChapter {
 }
 
 model Exercise {
-  id             String       @id @default(cuid())
-  chapterId      String
-  type           ExerciseType
-  prompt         Json
-  options        Json?
-  answerKey      Json?
-  solution       Json?
-  difficulty     Int          @default(1)
-  points         Int          @default(1)
-  sortOrder      Int
-  isPublished    Boolean      @default(false)
-  createdAt      DateTime     @default(now())
+  id                        String       @id @default(cuid())
+  chapterId                 String
+  type                      ExerciseType
+  prompt                    Json         // { fr: "...", ar: "..." }
+  options                   Json?        // For MCQ: { fr: [...], ar: [...] }
+  answerKey                 Json?        // Confidential
+  solution                  Json?        // Confidential step-by-step
+  solutionFr                String?      @db.Text
+  solutionAr                String?      @db.Text
+  difficulty                Int          @default(1) // 1-5
+  points                    Int          @default(1)
+  sortOrder                 Int
+  isPublished               Boolean      @default(false)
+  requireTeacherValidation  Boolean      @default(false) // AI correction needs prof approval
+  allowedAiModes            String[]     @default(["HINT"]) // Which AI modes are allowed
 
-  chapter        BookChapter @relation(fields: [chapterId], references: [id], onDelete: Restrict)
-  attempts       ExerciseAttempt[]
+  createdAt                 DateTime     @default(now())
+  updatedAt                 DateTime     @updatedAt
+
+  chapter                   BookChapter  @relation(fields: [chapterId], references: [id], onDelete: Restrict)
+  attempts                  ExerciseAttempt[]
 
   @@index([chapterId, sortOrder])
+  @@index([isPublished])
 }
+
+// =============================================================================
+// VIDEO & LIVE CONTENT (NEW V2)
+// =============================================================================
+
+// ── NEW V2: Video Content ────────────────────────────────────────────────────
+model VideoContent {
+  id                String          @id @default(cuid())
+  bookId            String
+  title             String
+  titleAr           String?
+  description       String?         @db.Text
+  durationSeconds   Int?
+  // Optional linkage to the catalog chapter (no FK: catalog is mirrored in-memory)
+  chapterId         String?
+  professorId       String?
+  professorName     String?
+  isFreePreview     Boolean         @default(false)
+  viewCount         Int             @default(0)
+  // S3 keys
+  hlsManifestKey    String?         // master.m3u8
+  thumbnailKey      String?
+  originalObjectKey String
+  checksumSha256    String?
+  fileSize          BigInt?         // bytes
+  status            ProcessingStatus @default(QUEUED)
+  processingError   String?
+  sortOrder         Int             @default(0)
+  isPublished       Boolean         @default(false)
+  createdAt         DateTime        @default(now())
+  readyAt           DateTime?
+
+  book              Book            @relation(fields: [bookId], references: [id], onDelete: Restrict)
+  qualities         VideoQuality[]
+  entitlements      Entitlement[]   @relation("VideoEntitlements")
+  liveSessions      LiveSession[]   @relation("LiveReplay")
+
+  @@index([bookId, status])
+  @@index([isPublished])
+}
+
+model VideoQuality {
+  id           String       @id @default(cuid())
+  videoId      String
+  resolution   String       // "360p" | "720p" | "1080p"
+  manifestKey  String       // path in MinIO: rendered/bookId/videoId/720p/index.m3u8
+  bandwidthBps Int          // approximate bitrate
+  segmentCount Int?
+
+  video        VideoContent @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@unique([videoId, resolution])
+}
+
+// ── NEW V2: Live Streaming ───────────────────────────────────────────────────
+model LiveSession {
+  id                String      @id @default(cuid())
+  bookId            String
+  professorId       String
+  title             String
+  titleAr           String?
+  description       String?     @db.Text
+  scheduledAt       DateTime
+  startedAt         DateTime?
+  endedAt           DateTime?
+  status            LiveStatus  @default(SCHEDULED)
+  maxParticipants   Int         @default(100)
+  // LiveKit / mediasoup room name — never exposed to clients
+  roomName          String      @unique @default(cuid())
+  // Pricing
+  priceMillimes     Int
+  subject           String?
+  estimatedDurationMinutes Int?
+  isFreeForTrimesterStudents Boolean @default(true)
+  pinnedMessage     String?
+  viewerCount       Int         @default(0)
+  currentParticipants Int       @default(0)
+  // LiveKit egress recording
+  egressId          String?
+  recordingStatus   String?
+  trimesterId       String?
+  // Post-session
+  replayVideoId     String?
+  recordingKey      String?     // S3 key of raw recording
+  participantCount  Int         @default(0)
+
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  book              Book           @relation(fields: [bookId], references: [id], onDelete: Restrict)
+  professor         ProfessorProfile @relation(fields: [professorId], references: [id], onDelete: Restrict)
+  trimester         Trimester?     @relation(fields: [trimesterId], references: [id], onDelete: SetNull)
+  replay            VideoContent?  @relation("LiveReplay", fields: [replayVideoId], references: [id], onDelete: SetNull)
+  participants      LiveParticipant[]
+  chatMessages      LiveChatMessage[]
+  entitlements      Entitlement[]  @relation("LiveEntitlements")
+
+  @@index([bookId, status])
+  @@index([professorId, scheduledAt])
+  @@index([scheduledAt])
+}
+
+model LiveParticipant {
+  id              String      @id @default(cuid())
+  liveSessionId   String
+  userId          String
+  entitlementId   String?
+  joinedAt        DateTime    @default(now())
+  leftAt          DateTime?
+  watchSeconds    Int         @default(0)
+  // LiveKit participant identity token hash
+  participantTokenHash String? @unique
+
+  liveSession     LiveSession @relation(fields: [liveSessionId], references: [id], onDelete: Restrict)
+  user            User        @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([liveSessionId, userId])
+  @@index([liveSessionId])
+  @@index([userId])
+}
+
+model LiveChatMessage {
+  id              String      @id @default(cuid())
+  liveSessionId   String
+  userId          String
+  message         String      @db.Text
+  userName        String?
+  userRole        String?
+  isQuestion      Boolean     @default(false)
+  isPinned        Boolean     @default(false)
+  // Pre-publication moderation: messages not shown until approved
+  isApproved      Boolean     @default(true)
+  approvedAt      DateTime?
+  approvedBy      String?     // userId of professor/moderator
+  createdAt       DateTime    @default(now())
+  deletedAt       DateTime?
+
+  liveSession     LiveSession @relation(fields: [liveSessionId], references: [id], onDelete: Restrict)
+  user            User        @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([liveSessionId, isApproved])
+  @@index([userId])
+}
+
+// =============================================================================
+// AI TUTOR (NEW V2)
+// =============================================================================
+
+model AiConversation {
+  id             String      @id @default(cuid())
+  userId         String
+  bookId         String?
+  chapterId      String?
+  exerciseId     String?
+  mode           AiMode      @default(CHAT)
+  language       String      @default("fr") // "fr" | "ar"
+  // Token usage tracking for FinOps (Layer 14)
+  totalTokensUsed Int        @default(0)
+  startedAt      DateTime    @default(now())
+  endedAt        DateTime?
+
+  user           User        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  book           Book?       @relation(fields: [bookId], references: [id], onDelete: SetNull)
+  messages       AiMessage[]
+
+  @@index([userId, startedAt])
+  @@index([bookId])
+}
+
+model AiMessage {
+  id             String        @id @default(cuid())
+  conversationId String
+  role           AiMessageRole
+  content        String        @db.Text
+  tokensUsed     Int?
+  modelVersion   String?       // e.g. "gemini-1.5-pro-002"
+  createdAt      DateTime      @default(now())
+
+  conversation   AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+}
+
+// AI corrections that need professor validation
+model AiCorrectionProposal {
+  id                  String             @id @default(cuid())
+  exerciseAttemptId   String             @unique
+  aiSuggestedAnswer   Json
+  aiExplanation       String             @db.Text
+  aiMethodDescription String?
+  aiConfidenceScore   Decimal?           @db.Decimal(5, 4) // 0.0000 – 1.0000
+  status              AiCorrectionStatus @default(PENDING_REVIEW)
+  // Professor review
+  professorDecision   String?            @db.Text
+  professorCorrectionOverride Json?
+  reviewedAt          DateTime?
+  reviewedByProfId    String?
+
+  attempt             ExerciseAttempt    @relation(fields: [exerciseAttemptId], references: [id], onDelete: Restrict)
+  reviewer            ProfessorProfile?  @relation("ReviewedBy", fields: [reviewedByProfId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([reviewedByProfId])
+}
+
+// =============================================================================
+// COMMERCE & PAYMENTS
+// =============================================================================
 
 model Purchase {
   id                String        @id @default(cuid())
@@ -331,6 +755,9 @@ model Purchase {
   discountMillimes  Int           @default(0)
   totalMillimes     Int
   idempotencyKey    String        @unique
+  // Client metadata for fraud detection
+  ipAddress         String?
+  userAgent         String?
   createdAt         DateTime      @default(now())
   paidAt            DateTime?
   updatedAt         DateTime      @updatedAt
@@ -342,219 +769,315 @@ model Purchase {
 
   @@index([userId, createdAt])
   @@index([status, createdAt])
+  @@index([idempotencyKey])
 }
 
 model PurchaseItem {
-  id                String   @id @default(cuid())
+  id                String      @id @default(cuid())
   purchaseId        String
   bookId            String
   bookTitleSnapshot String
   bookVersionId     String?
+  contentType       ContentType @default(PDF_COURSE)
+  trimesterId       String?
   unitPriceMillimes Int
-  quantity          Int      @default(1)
+  quantity          Int         @default(1)
   lineTotalMillimes Int
-  commissionBps     Int
-  createdAt         DateTime @default(now())
+  commissionBps     Int         @default(2000) // 20%
+  createdAt         DateTime    @default(now())
 
-  purchase          Purchase @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
-  book              Book     @relation(fields: [bookId], references: [id], onDelete: Restrict)
+  purchase          Purchase    @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
+  book              Book        @relation(fields: [bookId], references: [id], onDelete: Restrict)
   entitlement       Entitlement?
 
-  @@unique([purchaseId, bookId])
+  @@unique([purchaseId, bookId, contentType, trimesterId])
   @@index([bookId, createdAt])
 }
 
 model Payment {
-  id                   String       @id @default(cuid())
-  purchaseId           String
-  provider             String
-  providerReference    String?
+  id                     String        @id @default(cuid())
+  purchaseId             String
+  provider               String        // "FLOUCI" | "KONNECT" | "GPG"
+  providerReference      String?
   providerEventReference String?
-  status               PaymentStatus @default(CREATED)
-  amountMillimes       Int
-  currency             String       @default("TND")
-  checkoutUrl          String?
-  idempotencyKey       String       @unique
-  failureCode          String?
-  createdAt            DateTime     @default(now())
-  updatedAt            DateTime     @updatedAt
-  confirmedAt          DateTime?
+  status                 PaymentStatus @default(CREATED)
+  amountMillimes         Int
+  currency               String        @default("TND")
+  checkoutUrl            String?
+  idempotencyKey         String        @unique
+  failureCode            String?
+  // Webhook verification
+  lastWebhookSignature   String?       // stored for replay protection
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+  confirmedAt            DateTime?
 
-  purchase             Purchase     @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
-  events               PaymentEvent[]
+  purchase               Purchase      @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
+  events                 PaymentEvent[]
 
   @@unique([provider, providerReference])
   @@index([purchaseId, status])
 }
 
 model PaymentEvent {
-  id                   String   @id @default(cuid())
-  paymentId            String
-  providerEventId      String
-  eventType            String
-  payloadHash          String
-  receivedAt           DateTime @default(now())
-  processedAt          DateTime?
-  processingError      String?
+  id              String   @id @default(cuid())
+  paymentId       String
+  providerEventId String
+  eventType       String
+  // SHA-256 of raw webhook body — for replay protection
+  payloadHash     String
+  receivedAt      DateTime @default(now())
+  processedAt     DateTime?
+  processingError String?
 
-  payment              Payment  @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  payment         Payment  @relation(fields: [paymentId], references: [id], onDelete: Restrict)
 
   @@unique([paymentId, providerEventId])
   @@index([processedAt, receivedAt])
 }
 
+// =============================================================================
+// ENTITLEMENTS (ACCESS RIGHTS)
+// =============================================================================
+
 model Entitlement {
-  id                String            @id @default(cuid())
-  userId            String
-  bookId            String
-  purchaseItemId    String            @unique
-  academicYearId    String
-  status            EntitlementStatus @default(ACTIVE)
-  startsAt          DateTime
-  expiresAt         DateTime
-  grantedAt         DateTime          @default(now())
-  revokedAt         DateTime?
-  revokeReason      String?
+  id              String            @id @default(cuid())
+  userId          String
+  bookId          String
+  purchaseItemId  String            @unique
+  academicYearId  String
+  trimesterId     String?           // null = annual access
+  contentType     ContentType       @default(PDF_COURSE)
+  status          EntitlementStatus @default(ACTIVE)
+  startsAt        DateTime
+  expiresAt       DateTime          // Snapshotted at purchase time — immutable
+  grantedAt       DateTime          @default(now())
+  revokedAt       DateTime?
+  revokeReason    String?
 
-  user              User              @relation(fields: [userId], references: [id], onDelete: Restrict)
-  book              Book              @relation(fields: [bookId], references: [id], onDelete: Restrict)
-  purchaseItem      PurchaseItem      @relation(fields: [purchaseItemId], references: [id], onDelete: Restrict)
-  academicYear      AcademicYear      @relation(fields: [academicYearId], references: [id], onDelete: Restrict)
+  // Optional direct relations for video/live entitlements
+  videoId         String?
+  liveSessionId   String?
 
-  @@unique([userId, bookId, academicYearId])
+  user            User              @relation(fields: [userId], references: [id], onDelete: Restrict)
+  book            Book              @relation(fields: [bookId], references: [id], onDelete: Restrict)
+  purchaseItem    PurchaseItem      @relation(fields: [purchaseItemId], references: [id], onDelete: Restrict)
+  academicYear    AcademicYear      @relation(fields: [academicYearId], references: [id], onDelete: Restrict)
+  trimester       Trimester?        @relation(fields: [trimesterId], references: [id], onDelete: SetNull)
+  video           VideoContent?     @relation("VideoEntitlements", fields: [videoId], references: [id], onDelete: SetNull)
+  liveSession     LiveSession?      @relation("LiveEntitlements", fields: [liveSessionId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, bookId, academicYearId, contentType, trimesterId])
   @@index([userId, status, expiresAt])
   @@index([bookId, status])
+  @@index([expiresAt])
 }
 
-model ParentChildLink {
-  id                 String           @id @default(cuid())
-  parentId           String
-  childId            String
-  status             ParentLinkStatus @default(PENDING)
-  invitationHash     String?          @unique
-  expiresAt          DateTime?
-  approvedAt         DateTime?
-  revokedAt          DateTime?
-  createdAt          DateTime         @default(now())
+// =============================================================================
+// PARENT-CHILD LINKS
+// =============================================================================
 
-  parent             User             @relation("ParentLinks", fields: [parentId], references: [id], onDelete: Restrict)
-  child              User             @relation("ChildLinks", fields: [childId], references: [id], onDelete: Restrict)
+model ParentChildLink {
+  id             String          @id @default(cuid())
+  parentId       String
+  childId        String
+  status         ParentLinkStatus @default(PENDING)
+  // Child self-identifier: TUN-XXXX (public, shown in UI)
+  invitationCode String?         @unique
+  expiresAt      DateTime?
+  approvedAt     DateTime?
+  revokedAt      DateTime?
+  createdAt      DateTime        @default(now())
+
+  parent         User            @relation("ParentLinks", fields: [parentId], references: [id], onDelete: Restrict)
+  child          User            @relation("ChildLinks", fields: [childId], references: [id], onDelete: Restrict)
 
   @@unique([parentId, childId])
   @@index([childId, status])
 }
 
-model StudySession {
-  id                 String   @id @default(cuid())
-  userId             String
-  bookId             String
-  startedAt          DateTime @default(now())
-  lastActivityAt     DateTime @default(now())
-  endedAt            DateTime?
-  activeSeconds      Int      @default(0)
+// =============================================================================
+// STUDY & LEARNING ANALYTICS
+// =============================================================================
 
-  user               User     @relation(fields: [userId], references: [id], onDelete: Restrict)
-  book               Book     @relation(fields: [bookId], references: [id], onDelete: Restrict)
+model StudySession {
+  id              String   @id @default(cuid())
+  userId          String
+  bookId          String
+  startedAt       DateTime @default(now())
+  lastActivityAt  DateTime @default(now())
+  endedAt         DateTime?
+  activeSeconds   Int      @default(0)
+  pageReached     Int?
+  deviceType      String?  // "mobile" | "tablet" | "desktop"
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  book            Book     @relation(fields: [bookId], references: [id], onDelete: Restrict)
 
   @@index([userId, startedAt])
   @@index([bookId, startedAt])
 }
 
 model ExerciseAttempt {
-  id                 String        @id @default(cuid())
-  userId             String
-  exerciseId         String
-  status             AttemptStatus @default(IN_PROGRESS)
-  answer             Json?
-  score              Decimal?      @db.Decimal(7, 2)
-  maxScore           Decimal       @default(1) @db.Decimal(7, 2)
-  startedAt          DateTime      @default(now())
-  submittedAt        DateTime?
-  gradedAt           DateTime?
+  id             String        @id @default(cuid())
+  userId         String
+  exerciseId     String
+  status         AttemptStatus @default(IN_PROGRESS)
+  answer         Json?
+  score          Decimal?      @db.Decimal(7, 2)
+  maxScore       Decimal       @default(1) @db.Decimal(7, 2)
+  startedAt      DateTime      @default(now())
+  submittedAt    DateTime?
+  gradedAt       DateTime?
+  // AI involvement tracking
+  aiHintsUsed    Int           @default(0)
+  aiAssistedAt   DateTime?
 
-  user               User          @relation(fields: [userId], references: [id], onDelete: Restrict)
-  exercise           Exercise      @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
+  user           User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  exercise       Exercise      @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
+  aiProposal     AiCorrectionProposal?
 
   @@index([userId, submittedAt])
   @@index([exerciseId, status])
 }
 
-model BookReview {
-  id                 String       @id @default(cuid())
-  bookId             String
-  reviewerId         String
-  status             ReviewStatus @default(PENDING)
-  notes              String?
-  createdAt          DateTime     @default(now())
-  reviewedAt         DateTime?
+// =============================================================================
+// REVIEWS & MODERATION
+// =============================================================================
 
-  book               Book         @relation(fields: [bookId], references: [id], onDelete: Restrict)
-  reviewer           User         @relation("ReviewAuthor", fields: [reviewerId], references: [id], onDelete: Restrict)
+model BookReview {
+  id          String       @id @default(cuid())
+  bookId      String
+  reviewerId  String
+  status      ReviewStatus @default(PENDING)
+  notes       String?      @db.Text
+  createdAt   DateTime     @default(now())
+  reviewedAt  DateTime?
+
+  book        Book         @relation(fields: [bookId], references: [id], onDelete: Restrict)
+  reviewer    User         @relation("ReviewAuthor", fields: [reviewerId], references: [id], onDelete: Restrict)
 
   @@index([bookId, status])
 }
 
-model FinancialLedgerEntry {
-  id                 String           @id @default(cuid())
-  professorId        String
-  purchaseId         String?
-  type               LedgerEntryType
-  amountMillimes     Int
-  currency           String           @default("TND")
-  reference          String           @unique
-  description        String?
-  createdAt          DateTime         @default(now())
+// =============================================================================
+// FINANCIAL MODELS
+// =============================================================================
 
-  professor          ProfessorProfile @relation(fields: [professorId], references: [id], onDelete: Restrict)
-  purchase           Purchase?        @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
+model FinancialLedgerEntry {
+  id              String          @id @default(cuid())
+  professorId     String
+  purchaseId      String?
+  type            LedgerEntryType
+  amountMillimes  Int
+  currency        String          @default("TND")
+  reference       String          @unique
+  description     String?
+  // Immutable: createdAt is the ledger timestamp — no updatedAt
+  createdAt       DateTime        @default(now())
+
+  professor       ProfessorProfile @relation(fields: [professorId], references: [id], onDelete: Restrict)
+  purchase        Purchase?        @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
 
   @@index([professorId, createdAt])
   @@index([purchaseId])
+  @@index([type, createdAt])
 }
 
 model ProfessorPayout {
-  id                 String       @id @default(cuid())
-  professorId        String
-  amountMillimes     Int
-  currency           String       @default("TND")
-  status             PayoutStatus @default(PENDING)
-  providerReference  String?
-  periodStart        DateTime
-  periodEnd          DateTime
-  requestedAt        DateTime     @default(now())
-  processedAt        DateTime?
+  id                String       @id @default(cuid())
+  professorId       String
+  amountMillimes    Int
+  currency          String       @default("TND")
+  status            PayoutStatus @default(PENDING)
+  providerReference String?
+  periodStart       DateTime
+  periodEnd         DateTime
+  requestedAt       DateTime     @default(now())
+  processedAt       DateTime?
+  approvedBy        String?      // admin userId
 
-  professor          ProfessorProfile @relation(fields: [professorId], references: [id], onDelete: Restrict)
+  professor         ProfessorProfile @relation(fields: [professorId], references: [id], onDelete: Restrict)
 
   @@index([professorId, status, requestedAt])
 }
 
-model Notification {
-  id                 String   @id @default(cuid())
-  userId             String
-  type               String
-  title              String
-  body               String
-  readAt             DateTime?
-  createdAt          DateTime @default(now())
+// =============================================================================
+// NOTIFICATIONS
+// =============================================================================
 
-  user               User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+model Notification {
+  id          String    @id @default(cuid())
+  userId      String
+  type        String    // "ENTITLEMENT_EXPIRING" | "LIVE_STARTING" | etc.
+  title       String
+  titleAr     String?
+  body        String
+  bodyAr      String?
+  data        Json?     // arbitrary payload
+  readAt      DateTime?
+  sentAt      DateTime?
+  channel     String    @default("IN_APP") // "IN_APP" | "EMAIL" | "SMS" | "PUSH"
+  createdAt   DateTime  @default(now())
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   @@index([userId, readAt, createdAt])
+  @@index([type, sentAt])
+}
+
+// =============================================================================
+// SECURITY & COMPLIANCE (Layers 4, 13, 14)
+// =============================================================================
+
+model SecurityEvent {
+  id          String            @id @default(cuid())
+  userId      String?
+  type        SecurityEventType
+  severity    Int               @default(1) // 1-5
+  ipAddress   String?
+  userAgent   String?
+  metadata    Json?
+  resolved    Boolean           @default(false)
+  resolvedAt  DateTime?
+  createdAt   DateTime          @default(now())
+
+  user        User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([type, severity, createdAt])
+  @@index([resolved, createdAt])
 }
 
 model AuditLog {
-  id                 String   @id @default(cuid())
-  actorId            String?
-  action             String
-  resourceType       String
-  resourceId         String?
-  requestId          String?
-  metadata           Json?
-  createdAt          DateTime @default(now())
+  id           String    @id @default(cuid())
+  actorId      String?
+  action       String    // e.g. "book.publish", "entitlement.revoke"
+  resourceType String
+  resourceId   String?
+  requestId    String?   // correlation ID from HTTP header X-Request-ID
+  ipAddress    String?
+  userAgent    String?
+  metadata     Json?
+  createdAt    DateTime  @default(now())
 
-  actor              User?    @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  actor        User?     @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
 
   @@index([actorId, createdAt])
   @@index([resourceType, resourceId, createdAt])
+  @@index([action, createdAt])
+}
+
+// Rate limit tracking (backed by Redis — this is the persistent overflow log)
+model RateLimitViolation {
+  id          String   @id @default(cuid())
+  identifier  String   // IP or userId
+  endpoint    String
+  limit       Int
+  window      String   // "1m" | "1h"
+  count       Int
+  blockedAt   DateTime @default(now())
+
+  @@index([identifier, blockedAt])
+  @@index([endpoint, blockedAt])
 }

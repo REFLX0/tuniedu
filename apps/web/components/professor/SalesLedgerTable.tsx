@@ -2,7 +2,6 @@
 
 import React from 'react';
 import { FinancialLedgerEntry } from '@/lib/store';
-import { Icons } from '@/components/ui/icons';
 
 interface SalesLedgerTableProps {
   entries: FinancialLedgerEntry[];

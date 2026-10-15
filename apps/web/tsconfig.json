@@ -1,7 +1,11 @@
 {
   "compilerOptions": {
     "target": "ES2017",
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -11,7 +15,7 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "react-jsx",
+    "jsx": "preserve",
     "incremental": true,
     "plugins": [
       {
@@ -19,7 +23,24 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": [
+        "./*"
+      ],
+      "@tuniedu/shared-types": [
+        "../../packages/shared-types/index.ts"
+      ],
+      "@tuniedu/authorization": [
+        "../../packages/authorization/index.ts"
+      ],
+      "@tuniedu/database": [
+        "../../packages/database/index.ts"
+      ],
+      "@tuniedu/payments": [
+        "../../packages/payments/index.ts"
+      ],
+      "@tuniedu/validation": [
+        "../../packages/validation/index.ts"
+      ]
     }
   },
   "include": [
@@ -30,5 +51,7 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules"
+  ]
 }

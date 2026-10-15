@@ -1,0 +1,31 @@
+# TuniEdu LiveKit SFU configuration (dev)
+# Mounted read-only into the tuniedu-livekit container.
+port: 7880
+rtc:
+  tcp_port: 7881
+  udp_port: 7882
+  # Dev: the browser runs on the Docker host, which cannot route to the
+  # container's bridge IP (172.x). Advertise the published loopback address so
+  # host clients can reach the SFU's media ports; containers (egress) still
+  # reach it via the bridge host candidate.
+  use_external_ip: false
+  node_ip: 127.0.0.1
+  # Keep the container's bridge IP as a candidate too, so sibling containers
+  # (the egress recorder) can reach the SFU while host browsers use 127.0.0.1.
+  advertise_internal_ip: true
+  enable_loopback_candidate: true
+redis:
+  address: redis:6379
+keys:
+  tuniedu_livekit_key: tuniedu_livekit_secret_2026_super_secure
+room:
+  auto_create: true
+  empty_timeout: 300
+# Deliver signed lifecycle events (egress_started/ended, room events) to the
+# Next.js API so recordings can be promoted to replays.
+webhook:
+  api_key: tuniedu_livekit_key
+  urls:
+    - http://host.docker.internal:3000/api/lives/webhook
+logging:
+  level: info

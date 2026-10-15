@@ -1,4 +1,5 @@
 import * as crypto from 'crypto';
+import { PDFDocument } from 'pdf-lib';
 
 export interface ProcessPdfJob {
   bookId: string;
@@ -18,6 +19,8 @@ export interface ProcessPdfResult {
     width: number;
     height: number;
   }>;
+  /** true when page count/dimensions were read from a real parsed PDF. */
+  real?: boolean;
   error?: string;
 }
 
@@ -68,6 +71,67 @@ export function generateWatermarkSvg(
   `.trim();
 }
 
+export interface RenderedPdfPage {
+  pageNumber: number;
+  width: number;
+  height: number;
+  webp: Buffer;
+}
+
+export interface RenderPdfResult {
+  pageCount: number;
+  pages: RenderedPdfPage[];
+}
+
+/**
+ * Rasterises every PDF page to a WebP image using pdfjs-dist + @napi-rs/canvas.
+ * Pure: returns image buffers and lets the caller persist them (via storage).
+ * These modules are imported lazily so environments that only need metadata
+ * (page count) do not pay the cost or require the native canvas binary.
+ */
+export async function renderPdfPagesToWebp(
+  buffer: Buffer,
+  opts: { scale?: number; maxPages?: number } = {},
+): Promise<RenderPdfResult> {
+  const scale = opts.scale ?? 2;
+  const maxPages = opts.maxPages ?? Number.POSITIVE_INFINITY;
+
+  const canvasMod = await import('@napi-rs/canvas');
+  const pdfjs: any = await import('pdfjs-dist/legacy/build/pdf.mjs');
+
+  // pdfjs expects a browser-ish environment; provide the canvas primitives.
+  const g = globalThis as unknown as Record<string, unknown>;
+  g.DOMMatrix = g.DOMMatrix ?? canvasMod.DOMMatrix;
+  g.ImageData = g.ImageData ?? canvasMod.ImageData;
+  g.Path2D = g.Path2D ?? canvasMod.Path2D;
+
+  const loadingTask = pdfjs.getDocument({
+    data: new Uint8Array(buffer),
+    useSystemFonts: false,
+    isEvalSupported: false,
+    verbosity: 0,
+  });
+  const doc = await loadingTask.promise;
+
+  const pageCount: number = doc.numPages;
+  const limit = Math.min(pageCount, maxPages);
+  const pages: RenderedPdfPage[] = [];
+
+  for (let i = 1; i <= limit; i += 1) {
+    const page = await doc.getPage(i);
+    const viewport = page.getViewport({ scale });
+    const width = Math.max(1, Math.round(viewport.width));
+    const height = Math.max(1, Math.round(viewport.height));
+    const canvas = canvasMod.createCanvas(width, height);
+    const ctx = canvas.getContext('2d');
+    await page.render({ canvasContext: ctx, viewport }).promise;
+    pages.push({ pageNumber: i, width, height, webp: canvas.toBuffer('image/webp') });
+  }
+
+  await loadingTask.destroy();
+  return { pageCount, pages };
+}
+
 /**
  * PDF Processing worker execution simulator with sandboxing
  */
@@ -88,19 +152,36 @@ export async function processPdfWorker(job: ProcessPdfJob): Promise<ProcessPdfRe
   // 2. Checksum
   const checksumSha256 = calculateChecksum(buffer);
 
-  // 3. Page extraction & rendering
-  const simulatedPageCount = 12;
-  const pages = Array.from({ length: simulatedPageCount }, (_, i) => ({
+  // 3. Page extraction: read the REAL page count/dimensions when the PDF parses,
+  //    otherwise fall back to the deterministic placeholder layout.
+  let pageCount = 12;
+  let width = 1200;
+  let height = 1700;
+  let real = false;
+
+  try {
+    const doc = await PDFDocument.load(buffer, { updateMetadata: false });
+    pageCount = doc.getPageCount();
+    const first = doc.getPage(0).getSize();
+    width = Math.round(first.width);
+    height = Math.round(first.height);
+    real = true;
+  } catch {
+    // Non-parseable (e.g. the simulated placeholder) -> keep deterministic fallback.
+  }
+
+  const pages = Array.from({ length: pageCount }, (_, i) => ({
     pageNumber: i + 1,
     objectKey: `rendered/${job.bookId}/v${job.versionNumber}/page_${i + 1}.webp`,
-    width: 1200,
-    height: 1700,
+    width,
+    height,
   }));
 
   return {
     success: true,
     checksumSha256,
-    pageCount: simulatedPageCount,
+    pageCount,
     pages,
+    real,
   };
 }

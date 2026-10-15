@@ -1,3 +1,4 @@
+import * as crypto from 'crypto';
 import { PaymentStatus, PurchaseStatus, LedgerEntryType } from '@tuniedu/shared-types';
 
 export const PLATFORM_COMMISSION_BPS = 2000; // 20.00%
@@ -82,17 +83,43 @@ export function canTransitionPayment(current: PaymentStatus, target: PaymentStat
 }
 
 /**
+ * Computes production HMAC-SHA256 signature for webhook payloads
+ */
+export function computeWebhookSignature(rawBody: string, secret: string): string {
+  return crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
+}
+
+/**
  * Validates webhook cryptographic signature
- * In production: HMAC-SHA256 with provider webhook secret
+ * In production: Constant-time comparison of HMAC-SHA256 hex or base64
+ * SEC-07: Tampered or invalid signatures are strictly rejected
  */
 export function verifyWebhookSignature(
   rawBody: string,
   signature: string,
   secret: string
 ): boolean {
-  if (!signature || !secret) return false;
-  // Test mock passes if signature starts with 'sig_' or matches hash
-  return signature.startsWith('sig_valid_') || signature === `hash_${secret.slice(0, 8)}`;
+  if (!signature || !secret || typeof rawBody !== 'string') return false;
+
+  try {
+    const computedHex = computeWebhookSignature(rawBody, secret);
+    const sigBuffer = Buffer.from(signature, 'utf8');
+    const compBuffer = Buffer.from(computedHex, 'utf8');
+
+    if (sigBuffer.length !== compBuffer.length) {
+      // Also try base64 encoding if hex length differs
+      const computedBase64 = crypto.createHmac('sha256', secret).update(rawBody).digest('base64');
+      const base64Buffer = Buffer.from(computedBase64, 'utf8');
+      if (sigBuffer.length === base64Buffer.length && crypto.timingSafeEqual(sigBuffer, base64Buffer)) {
+        return true;
+      }
+      return false;
+    }
+
+    return crypto.timingSafeEqual(sigBuffer, compBuffer);
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -104,7 +131,7 @@ export class PaymentAdapter {
   async createCheckoutSession(req: PaymentInitializationRequest): Promise<PaymentInitializationResponse> {
     const paymentId = `pay_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const providerReference = `flouci_ref_${Date.now()}`;
-    const checkoutUrl = `/checkout/gateway-simulation?paymentId=${paymentId}&amount=${req.amountMillimes}&ref=${providerReference}`;
+    const checkoutUrl = `/checkout/gateway-simulation?paymentId=${paymentId}&amount=${req.amountMillimes}&ref=${providerReference}&provider=${req.provider}`;
 
     return {
       paymentId,

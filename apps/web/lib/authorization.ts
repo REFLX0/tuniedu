@@ -1,3 +1,8 @@
+// =============================================================================
+// TuniEdu Authorization & Role-Based Access Control (RBAC)
+// SEC-01, SEC-02, SEC-03, SEC-09, SEC-10, SEC-11, SEC-12, SEC-16
+// =============================================================================
+
 export type UserRole = 'STUDENT' | 'PARENT' | 'PROFESSOR' | 'REVIEWER' | 'ADMIN';
 export type EntitlementStatus = 'ACTIVE' | 'EXPIRED' | 'REVOKED';
 export type ProfessorStatus = 'PENDING' | 'VERIFIED' | 'REJECTED' | 'SUSPENDED';

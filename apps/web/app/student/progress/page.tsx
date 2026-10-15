@@ -7,7 +7,7 @@ import { useLanguage } from '@/lib/language-context';
 import { Icons } from '@/components/ui/icons';
 
 export default function StudentProgressPage() {
-  const { lang, isRtl } = useLanguage();
+  const { lang } = useLanguage();
   const currentUserId = store.currentUserId;
   const attempts = store.attempts.filter((a) => a.userId === currentUserId);
   const correctCount = attempts.filter((a) => a.isCorrect).length;

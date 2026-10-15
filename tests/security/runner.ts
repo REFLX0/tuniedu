@@ -1,7 +1,7 @@
 import { runSecurityAcceptanceTests } from './sec-tests';
 
 console.log('===========================================================');
-console.log('   TUNIEDU SECURITY ACCEPTANCE TEST RUNNER (SEC-01 - SEC-14)');
+console.log('   TUNIEDU SECURITY ACCEPTANCE TEST RUNNER (SEC-01 - SEC-26)');
 console.log('===========================================================\n');
 
 const results = runSecurityAcceptanceTests();

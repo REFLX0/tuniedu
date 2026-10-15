@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { store } from '@/lib/store';
 import { checkBookAccess } from '@/lib/authorization';
+import { requireApiSession } from '@/lib/auth';
 
 export async function GET(
   req: NextRequest,
@@ -9,9 +10,10 @@ export async function GET(
   const { bookId, pageNumber } = await params;
   const pageNum = parseInt(pageNumber, 10);
 
-  // Authenticate user
-  const userId = req.headers.get('x-user-id') || store.currentUserId;
-  const user = store.users.find((u) => u.id === userId);
+  // Authenticate user securely (SEC-01) — fail closed
+  const auth = await requireApiSession(req);
+  if (auth.errorResponse) return auth.errorResponse;
+  const user = store.users.find((u) => u.id === auth.user.id);
 
   if (!user) {
     // SEC-01
@@ -28,7 +30,16 @@ export async function GET(
   const authCheck = checkBookAccess({
     userId: user.id,
     bookId,
-    entitlement: entitlement as any,
+    entitlement: entitlement
+      ? {
+          id: entitlement.id,
+          userId: entitlement.userId,
+          bookId: entitlement.bookId,
+          status: entitlement.status,
+          startsAt: entitlement.startsAt,
+          expiresAt: entitlement.expiresAt,
+        }
+      : null,
   });
 
   if (!authCheck.allowed) {

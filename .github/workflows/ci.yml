@@ -24,8 +24,17 @@ jobs:
       - name: Install Monorepo Dependencies
         run: npm ci
 
-      - name: Run Security Acceptance Tests (SEC-01 to SEC-14)
+      - name: Generate Prisma Client
+        run: npm run prisma:generate
+
+      - name: Run Security Acceptance Tests (SEC-01 to SEC-26)
         run: npm run test:security
+
+      - name: Run Webhook Signature Regression Tests
+        run: npm run test:webhook
+
+      - name: Run Fail-Closed Session Regression Tests
+        run: npm run test:auth-session
 
       - name: Build Web Application
         run: npm run build

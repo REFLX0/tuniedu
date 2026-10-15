@@ -35,7 +35,7 @@ export function SecureBookReader({
     1: 'Règle essentielle sur les radicaux pour le concours pilote !',
   });
   const [currentNoteText, setCurrentNoteText] = useState<string>('');
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [, setIsFullscreen] = useState(false);
 
   const [nowIso, setNowIso] = useState('2026-10-12T12:00:00.000Z');
 

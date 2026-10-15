@@ -28,6 +28,11 @@ export function LevelSelector({ selectedStage, onSelectStage }: LevelFilterProps
       labelAr: 'التعليم الابتدائي (1–6)',
     },
     {
+      id: 'LYCEE',
+      labelFr: 'Lycée & Baccalauréat (1ère à 4ème Bac)',
+      labelAr: 'التعليم الثانوي والبكالوريا (من 1 إلى 4 ثانوي)',
+    },
+    {
       id: 'UNIVERSITE',
       labelFr: 'Université (Mathématiques)',
       labelAr: 'التعليم العالي (رياضيات)',

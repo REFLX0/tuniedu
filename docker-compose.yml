@@ -13,6 +13,13 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tuniedu_user -d tuniedu_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - tuniedu-network
 
   redis:
     image: redis:7-alpine
@@ -22,9 +29,16 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - tuniedu-network
 
   minio:
-    image: minio/minio:RELEASE.2024-05-10T01-41-38Z
+    image: cgr.dev/chainguard/minio:latest
     container_name: tuniedu-storage
     restart: always
     environment:
@@ -36,8 +50,54 @@ services:
       - "9001:9001"
     volumes:
       - minio_data:/data
+    networks:
+      - tuniedu-network
+    healthcheck:
+      test: ["CMD-SHELL", "mc ready local || exit 0"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  livekit:
+    image: livekit/livekit-server:latest
+    container_name: tuniedu-livekit
+    restart: always
+    command: --config /etc/livekit.yaml
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "7882:7882/udp"
+    volumes:
+      - ./docker/livekit.yaml:/etc/livekit.yaml:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - redis
+    networks:
+      - tuniedu-network
+
+  livekit-egress:
+    image: livekit/egress:latest
+    container_name: tuniedu-livekit-egress
+    restart: always
+    environment:
+      EGRESS_CONFIG_FILE: /etc/egress.yaml
+    volumes:
+      - ./docker/egress.yaml:/etc/egress.yaml:ro
+    cap_add:
+      - SYS_ADMIN
+    shm_size: 1gb
+    depends_on:
+      - livekit
+      - redis
+      - minio
+    networks:
+      - tuniedu-network
 
 volumes:
   postgres_data:
   redis_data:
   minio_data:
+
+networks:
+  tuniedu-network:
+    driver: bridge

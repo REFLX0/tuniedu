@@ -14,32 +14,35 @@ export default function BookDetailPage() {
   const slug = params?.slug as string;
 
   const [isProcessingCheckout, setIsProcessingCheckout] = useState(false);
-  const [purchaseSuccess, setPurchaseSuccess] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [selectedPaymentProvider, setSelectedPaymentProvider] = useState<'FLOUCI' | 'CARTE_BANCAIRE'>('FLOUCI');
-  const [activeTab, setActiveTab] = useState<'SYLLABUS' | 'METHODOLOGY' | 'AUTHOR'>('SYLLABUS');
 
   const book = store.books.find((b) => b.slug === slug) || store.books[0];
   const activeYear = store.getActiveAcademicYear();
-  const hasAccess = store.hasActiveEntitlement(store.currentUserId, book.id);
-  const entitlement = store.getEntitlement(store.currentUserId, book.id);
+  const hasAccess = store.hasActiveEntitlement(store.getCurrentUser()?.id ?? '', book.id);
 
   const formatDT = (m: number) => (m / 1000).toFixed(3) + (lang === 'ar' ? ' د.ت' : ' DT');
 
-  const handleBuy = () => {
+  const handleBuy = async () => {
     setIsProcessingCheckout(true);
+    setCheckoutError(null);
 
-    setTimeout(() => {
-      // Execute atomic checkout through domain store logic
-      store.processCheckout({
-        userId: store.currentUserId,
-        bookIds: [book.id],
-        paymentProvider: 'FLOUCI',
-        idempotencyKey: `idemp_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+    try {
+      const idempotencyKey = `idemp_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+      const res = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookIds: [book.id], paymentProvider: 'FLOUCI', idempotencyKey }),
       });
-
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Erreur lors de la création du paiement');
+      }
+      router.push(data.checkoutUrl || data.redirectUrl || `/checkout?bookId=${book.id}`);
+    } catch (err) {
+      setCheckoutError(err instanceof Error ? err.message : 'Paiement impossible');
       setIsProcessingCheckout(false);
-      setPurchaseSuccess(true);
-    }, 600);
+    }
   };
 
   return (
@@ -165,7 +168,7 @@ export default function BookDetailPage() {
             </div>
 
             {/* Payment Method Selector (if not yet owned) */}
-            {!hasAccess && !purchaseSuccess && (
+            {!hasAccess && (
               <div className="space-y-2 pt-2">
                 <label className="text-xs font-bold text-slate-700">
                   {lang === 'ar' ? 'وسيلة الدفع الوطنية المفضلة :' : 'Mode de Paiement National :'}
@@ -202,63 +205,57 @@ export default function BookDetailPage() {
           </div>
 
           {/* Pricing Box & CTA */}
-          <div className="pt-6 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div>
-              <div className="text-xs font-semibold text-slate-400">
-                {lang === 'ar' ? 'سعر النفاذ السنوي الشامل :' : 'Tarif Unique Annuel :'}
+          <div className="pt-6 border-t border-slate-100 space-y-4">
+            {checkoutError && (
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-900">
+                {checkoutError}
               </div>
-              <div className="flex items-baseline gap-1.5 mt-0.5">
-                <span className="text-3xl font-bold text-slate-950 font-serif">{formatDT(book.priceMillimes)}</span>
-                <span className="text-xs text-slate-400 font-mono">({book.priceMillimes} {lang === 'ar' ? 'مليم' : 'millimes'})</span>
+            )}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div>
+                <div className="text-xs font-semibold text-slate-400">
+                  {lang === 'ar' ? 'سعر النفاذ السنوي الشامل :' : 'Tarif Unique Annuel :'}
+                </div>
+                <div className="flex items-baseline gap-1.5 mt-0.5">
+                  <span className="text-3xl font-bold text-slate-950 font-serif">{formatDT(book.priceMillimes)}</span>
+                  <span className="text-xs text-slate-400 font-mono">({book.priceMillimes} {lang === 'ar' ? 'مليم' : 'millimes'})</span>
+                </div>
               </div>
-            </div>
 
-            <div>
-              {hasAccess ? (
-                <Link
-                  href={`/student/library/${book.id}`}
-                  className="px-6 py-3.5 rounded-xl bg-blue-700 hover:bg-blue-800 text-white font-semibold text-xs transition shadow-xs flex items-center gap-2"
-                >
-                  <Icons.Eye className="w-4 h-4" />
-                  <span>{lang === 'ar' ? 'فتح الكتاب في القارئ الرقمي' : 'Ouvrir le Manuel dans le Lecteur'}</span>
-                </Link>
-              ) : purchaseSuccess ? (
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-bold text-blue-700 flex items-center gap-1">
-                    <Icons.Check className="w-4 h-4" />
-                    {lang === 'ar' ? 'تم الشراء بنجاح !' : 'Accès Activé !'}
-                  </span>
+              <div>
+                {hasAccess ? (
                   <Link
                     href={`/student/library/${book.id}`}
-                    className="px-5 py-3 rounded-xl bg-blue-700 text-white font-semibold text-xs shadow-xs hover:bg-blue-800"
+                    className="px-6 py-3.5 rounded-xl bg-blue-700 hover:bg-blue-800 text-white font-semibold text-xs transition shadow-xs flex items-center gap-2"
                   >
-                    {lang === 'ar' ? 'ابدأ القراءة' : 'Commencer la lecture'}
+                    <Icons.Eye className="w-4 h-4" />
+                    <span>{lang === 'ar' ? 'فتح الكتاب في القارئ الرقمي' : 'Ouvrir le Manuel dans le Lecteur'}</span>
                   </Link>
-                </div>
-              ) : (
-                <div className="flex flex-col sm:flex-row items-center gap-2.5">
-                  <Link
-                    href={`/checkout/gateway-simulation?bookId=${book.id}&amount=${book.priceMillimes}&paymentId=pay_${book.id}_${Date.now()}`}
-                    className="px-4 py-3.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-200 font-semibold text-xs transition shadow-xs flex items-center gap-1.5"
-                  >
-                    <Icons.CreditCard className="w-3.5 h-3.5 text-blue-700" />
-                    <span>{lang === 'ar' ? 'بوابة الدفع الوطنية (Flouci)' : 'Passerelle Nationale (Flouci)'}</span>
-                  </Link>
+                ) : (
+                  <div className="flex flex-col sm:flex-row items-center gap-2.5">
+                    <Link
+                      href={`/checkout?bookId=${book.id}`}
+                      className="px-4 py-3.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-200 font-semibold text-xs transition shadow-xs flex items-center gap-1.5"
+                    >
+                      <Icons.CreditCard className="w-3.5 h-3.5 text-blue-700" />
+                      <span>{lang === 'ar' ? 'اختيار العرض (فصل / سنوي)' : 'Choisir la Formule (Trimestre / Annuel)'}</span>
+                    </Link>
 
-                  <button
-                    onClick={handleBuy}
-                    disabled={isProcessingCheckout}
-                    className="px-6 py-3.5 rounded-xl bg-blue-700 hover:bg-blue-800 text-white font-semibold text-xs transition shadow-xs flex items-center gap-2 disabled:opacity-50"
-                  >
-                    <Icons.Check className="w-4 h-4" />
-                    <span>
-                      {isProcessingCheckout
-                        ? lang === 'ar' ? 'جارٍ المعالجة...' : 'Traitement...'
-                        : lang === 'ar' ? 'تفعيل فوري' : 'Activation Immédiate'}
-                    </span>
-                  </button>
-                </div>
-              )}
+                    <button
+                      onClick={handleBuy}
+                      disabled={isProcessingCheckout}
+                      className="px-6 py-3.5 rounded-xl bg-blue-700 hover:bg-blue-800 text-white font-semibold text-xs transition shadow-xs flex items-center gap-2 disabled:opacity-50"
+                    >
+                      <Icons.Check className="w-4 h-4" />
+                      <span>
+                        {isProcessingCheckout
+                          ? lang === 'ar' ? 'جارٍ المعالجة...' : 'Traitement...'
+                          : lang === 'ar' ? 'تفعيل فوري' : 'Activation Immédiate'}
+                      </span>
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

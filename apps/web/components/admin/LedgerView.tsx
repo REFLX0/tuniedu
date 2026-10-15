@@ -12,7 +12,7 @@ export function LedgerView() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isPayoutModalOpen, setIsPayoutModalOpen] = useState(false);
   const [payoutAmountDT, setPayoutAmountDT] = useState('50.000');
-  const [payoutProfId, setPayoutProfId] = useState('prof_profile_1');
+  const [payoutProfId] = useState('prof_hichem_profile');
   const [notificationMsg, setNotificationMsg] = useState('');
 
   // Financial calculations
@@ -53,7 +53,7 @@ export function LedgerView() {
     if (isNaN(amountNum) || amountNum <= 0) return;
 
     const millimes = Math.round(amountNum * 1000);
-    const newEntry = store.recordPayout(
+    store.recordPayout(
       payoutProfId,
       millimes,
       `BCT-VIR-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`

@@ -1,0 +1,17 @@
+# TuniEdu LiveKit Egress configuration (dev)
+# Records room-composite MP4s straight into the MinIO videos bucket so the
+# existing HLS transcode pipeline can turn a finished live into a replay VOD.
+log_level: info
+api_key: tuniedu_livekit_key
+api_secret: tuniedu_livekit_secret_2026_super_secure
+ws_url: ws://livekit:7880
+redis:
+  address: redis:6379
+insecure: true
+s3:
+  access_key: tuniedu_admin
+  secret: tuniedu_secure_storage_2026
+  region: us-east-1
+  endpoint: http://minio:9000
+  bucket: tuniedu-videos-hls
+  force_path_style: true

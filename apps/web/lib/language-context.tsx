@@ -21,23 +21,37 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const [lang, setLangState] = useState<Language>('fr');
 
   useEffect(() => {
-    const saved = localStorage.getItem('tuniedu_lang') as Language;
-    if (saved && (saved === 'fr' || saved === 'ar')) {
-      setLangState(saved);
-      document.documentElement.lang = saved;
-      document.documentElement.dir = saved === 'ar' ? 'rtl' : 'ltr';
+    try {
+      if (typeof window !== 'undefined' && typeof window.localStorage?.getItem === 'function') {
+        const saved = window.localStorage.getItem('tuniedu_lang') as Language;
+        if (saved && (saved === 'fr' || saved === 'ar')) {
+          setLangState(saved);
+          document.documentElement.lang = saved;
+          document.documentElement.dir = saved === 'ar' ? 'rtl' : 'ltr';
+        }
+      }
+    } catch {
+      // storage read is best-effort
     }
   }, []);
 
   const setLang = (newLang: Language) => {
     setLangState(newLang);
-    localStorage.setItem('tuniedu_lang', newLang);
-    document.documentElement.lang = newLang;
-    document.documentElement.dir = newLang === 'ar' ? 'rtl' : 'ltr';
+    try {
+      if (typeof window !== 'undefined' && typeof window.localStorage?.setItem === 'function') {
+        window.localStorage.setItem('tuniedu_lang', newLang);
+      }
+    } catch {
+      // storage write is best-effort
+    }
+    if (typeof document !== 'undefined') {
+      document.documentElement.lang = newLang;
+      document.documentElement.dir = newLang === 'ar' ? 'rtl' : 'ltr';
+    }
   };
 
   const isRtl = lang === 'ar';
-  const t = DICTIONARY[lang];
+  const t = (DICTIONARY as Record<Language, Translations>)[lang] || DICTIONARY.fr;
 
   return (
     <LanguageContext.Provider value={{ lang, setLang, t, isRtl }}>

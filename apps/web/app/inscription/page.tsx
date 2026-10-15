@@ -4,23 +4,44 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/lib/language-context';
+import { store } from '@/lib/store';
+import { useSession } from '@/components/providers/SessionProvider';
 import { Icons } from '@/components/ui/icons';
+
+const DASHBOARD_BY_ROLE: Record<string, string> = {
+  STUDENT: '/student/library',
+  PARENT: '/parent',
+  PROFESSOR: '/professor',
+  ADMIN: '/admin',
+};
 
 export default function InscriptionPage() {
   const router = useRouter();
-  const { lang, isRtl } = useLanguage();
+  const { lang } = useLanguage();
+  const { refresh } = useSession();
 
   const [accountType, setAccountType] = useState<'STUDENT' | 'PARENT' | 'PROFESSOR'>('STUDENT');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [password, setPassword] = useState('');
   const [childId, setChildId] = useState('');
   const [acceptedCommissionTerms, setAcceptedCommissionTerms] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
+
+    if (password.length < 8) {
+      setErrorMessage(
+        lang === 'ar'
+          ? 'يجب أن تحتوي كلمة المرور على 8 أحرف على الأقل.'
+          : 'Le mot de passe doit contenir au moins 8 caractères.'
+      );
+      return;
+    }
 
     if (accountType === 'PROFESSOR' && !acceptedCommissionTerms) {
       setErrorMessage(
@@ -40,15 +61,45 @@ export default function InscriptionPage() {
       return;
     }
 
-    // Redirect to login with prefilled context
-    router.push('/connexion');
+    setIsSubmitting(true);
+
+    try {
+      const response = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accountType,
+          fullName,
+          email,
+          password,
+          phone: phone || undefined,
+          childPublicId: accountType === 'PARENT' ? childId : undefined,
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        setErrorMessage(data.error || (lang === 'ar' ? 'تعذّر إنشاء الحساب.' : 'Création du compte impossible.'));
+        setIsSubmitting(false);
+        return;
+      }
+
+      const user = data.user;
+      store.upsertUser(user);
+      store.setCurrentUser(user.id);
+      await refresh();
+      router.push(DASHBOARD_BY_ROLE[user.role] || '/');
+    } catch {
+      setErrorMessage(lang === 'ar' ? 'تعذّر الاتصال بالخادم.' : 'Impossible de contacter le serveur.');
+      setIsSubmitting(false);
+    }
   };
 
   return (
-    // Clean White & Sky-Blue Canvas (#F8FAFC) with soothing eye-comfort blue accents
     <div className="min-h-[88vh] bg-[#F8FAFC] py-10 px-4 sm:px-6 lg:px-8 flex items-center justify-center">
       <div className="max-w-lg w-full bg-white rounded-2xl border border-blue-100 shadow-[0_4px_24px_rgba(29,78,216,0.06)] p-7 sm:p-9 space-y-7">
-        
+
         {/* Child Eye-Protection & Ergonomics Certification Banner */}
         <div className="flex items-center justify-between px-3 py-2 bg-blue-50/80 border border-blue-200/80 rounded-xl text-[11px] text-blue-900">
           <div className="flex items-center gap-2 font-medium">
@@ -154,7 +205,7 @@ export default function InscriptionPage() {
               required
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              placeholder={accountType === 'STUDENT' ? 'Elyes Mansour' : 'Sihem Mansour'}
+              placeholder={lang === 'ar' ? 'الاسم الكامل' : 'Prénom Nom'}
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-600/25 focus:border-blue-600 transition"
             />
           </div>
@@ -168,7 +219,7 @@ export default function InscriptionPage() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="contact@famille.tn"
+              placeholder="vous@exemple.tn"
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-600/25 focus:border-blue-600 transition"
             />
           </div>
@@ -186,6 +237,22 @@ export default function InscriptionPage() {
             />
           </div>
 
+          <div>
+            <label className="font-semibold text-slate-700 block mb-1.5">
+              {lang === 'ar' ? 'كلمة المرور (8 أحرف على الأقل) :' : 'Mot de passe (8 caractères min.) :'}
+            </label>
+            <input
+              type="password"
+              required
+              minLength={8}
+              autoComplete="new-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-600/25 focus:border-blue-600 transition"
+            />
+          </div>
+
           {/* PARENT SPECIFIC: Child ID */}
           {accountType === 'PARENT' && (
             <div className="p-4 bg-blue-50/50 border border-blue-200 rounded-xl space-y-3">
@@ -198,7 +265,7 @@ export default function InscriptionPage() {
                   {lang === 'ar' ? 'إجباري للربط' : 'Obligatoire'}
                 </span>
               </div>
-              
+
               <p className="text-[11px] text-slate-600 leading-relaxed">
                 {lang === 'ar'
                   ? 'أدخل المعرّف الرقمي للتلميذ (مثال: TUN-9842) لربطه بحسابك وتفعيل الرقابة الأبوية وساعات الدراسة.'
@@ -209,7 +276,7 @@ export default function InscriptionPage() {
                 type="text"
                 required
                 value={childId}
-                onChange={(e) => setChildId(e.target.value)}
+                onChange={(e) => setChildId(e.target.value.toUpperCase())}
                 placeholder="Ex: TUN-9842"
                 className="w-full px-3.5 py-2.5 rounded-lg border border-blue-300 font-mono text-xs text-blue-950 bg-white uppercase tracking-wider focus:outline-none focus:ring-2 focus:ring-blue-600/30 focus:border-blue-600"
               />
@@ -259,17 +326,21 @@ export default function InscriptionPage() {
 
           <button
             type="submit"
-            disabled={accountType === 'PROFESSOR' && !acceptedCommissionTerms}
+            disabled={isSubmitting || (accountType === 'PROFESSOR' && !acceptedCommissionTerms)}
             className="w-full py-3.5 px-4 rounded-xl bg-blue-700 hover:bg-blue-800 text-white font-semibold text-xs tracking-wide transition shadow-xs disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-2"
           >
-            <span>
-              {accountType === 'STUDENT'
-                ? lang === 'ar' ? 'إنشاء حساب التلميذ' : 'Créer mon Compte Élève'
-                : accountType === 'PARENT'
-                ? lang === 'ar' ? 'إنشاء حساب الولي وربط التلميذ' : 'Créer mon Compte Parent & Lier l\'Enfant'
-                : lang === 'ar' ? 'إنشاء حساب الأستاذ المؤلف' : 'Créer mon Compte Enseignant Auteur'}
-            </span>
-            <Icons.ArrowRight className={`w-3.5 h-3.5 ${isRtl ? 'rotate-180' : ''}`} />
+            {isSubmitting ? (
+              <span>{lang === 'ar' ? 'جارٍ إنشاء الحساب...' : 'Création du compte...'}</span>
+            ) : (
+              <span>
+                {accountType === 'STUDENT'
+                  ? lang === 'ar' ? 'إنشاء حساب التلميذ' : 'Créer mon Compte Élève'
+                  : accountType === 'PARENT'
+                  ? lang === 'ar' ? 'إنشاء حساب الولي وربط التلميذ' : 'Créer mon Compte Parent & Lier l\'Enfant'
+                  : lang === 'ar' ? 'إنشاء حساب الأستاذ المؤلف' : 'Créer mon Compte Enseignant Auteur'}
+              </span>
+            )}
+            <Icons.ArrowRight className="w-3.5 h-3.5" />
           </button>
         </form>
 

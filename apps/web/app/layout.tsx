@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { LanguageProvider } from '@/lib/language-context';
+import { SessionProvider } from '@/components/providers/SessionProvider';
 import { Navbar } from '@/components/ui/Navbar';
 import { MobileBottomNav } from '@/components/ui/MobileBottomNav';
 
@@ -16,8 +17,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="fr" className="h-full bg-[#F8FAFC] text-[#0F172A]">
+    <html lang="fr" suppressHydrationWarning className="h-full bg-[#F8FAFC] text-[#0F172A]">
       <body className="min-h-full flex flex-col font-sans antialiased text-[#0F172A] bg-[#F8FAFC] selection:bg-[#1D4ED8] selection:text-white">
+        <SessionProvider>
         <LanguageProvider>
           {/* Institutional Top Navbar */}
           <Navbar />
@@ -68,6 +70,7 @@ export default function RootLayout({
           {/* Mobile Bottom Navigation */}
           <MobileBottomNav />
         </LanguageProvider>
+        </SessionProvider>
       </body>
     </html>
   );

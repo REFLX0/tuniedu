@@ -1,27 +1,53 @@
 {
   "name": "tuniedu-monorepo",
-  "version": "1.0.0",
-  "description": "Tunisian Education Platform - Mobile-first educational marketplace for primary, collège and beyond",
+  "version": "2.0.0",
+  "description": "TuniEdu — Tunisian National Educational Platform (Production V2)",
   "private": true,
   "workspaces": [
     "apps/*",
     "packages/*",
     "workers/*"
   ],
+  "overrides": {
+    "next": "15.5.27",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "postcss": "8.5.30"
+  },
   "scripts": {
     "dev": "npm run dev --workspace=apps/web",
     "build": "npm run build --workspace=apps/web",
     "start": "npm run start --workspace=apps/web",
     "lint": "npm run lint --workspace=apps/web",
-    "prisma:generate": "npx prisma generate",
-    "prisma:migrate": "npx prisma migrate dev",
+    "type-check": "npm run type-check --workspace=apps/web",
+    "prisma:generate": "npx prisma generate --schema=prisma/schema.prisma",
+    "prisma:migrate:dev": "npx prisma migrate dev --schema=prisma/schema.prisma",
+    "prisma:migrate:deploy": "npx prisma migrate deploy --schema=prisma/schema.prisma",
     "prisma:seed": "npx tsx prisma/seed.ts",
-    "test:security": "npx tsx tests/security/runner.ts"
+    "prisma:studio": "npx prisma studio --schema=prisma/schema.prisma",
+    "test:security": "npx tsx tests/security/runner.ts",
+    "test:webhook": "npx tsx tests/security/webhook-tests.ts",
+    "test:auth-session": "npx tsx tests/security/auth-session-tests.ts",
+    "test:security:all": "npm run test:security && npm run test:webhook && npm run test:auth-session",
+    "test:persistence": "tsx tests/persistence/purchase-integration-tests.ts",
+    "test:infra": "tsx tests/integration/infra-tests.ts",
+    "test:queue": "tsx tests/integration/queue-tests.ts",
+    "test:media": "tsx tests/integration/media-tests.ts",
+    "test:notify": "tsx tests/integration/notification-tests.ts",
+    "test:ai": "tsx tests/integration/ai-tests.ts",
+    "worker:start": "tsx workers/runner.ts",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f"
   },
   "devDependencies": {
-    "prisma": "^5.14.0",
-    "@prisma/client": "^5.14.0",
-    "tsx": "^4.10.5",
-    "typescript": "^5.4.5"
+    "@napi-rs/canvas": "^1.0.11",
+    "@prisma/client": "^5.22.0",
+    "next": "15.5.27",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^6.4.299",
+    "prisma": "^5.22.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
   }
 }

@@ -13,7 +13,7 @@ interface BookCardProps {
 }
 
 export function BookCard({ book, hasAccess, onPreview }: BookCardProps) {
-  const { lang, t, isRtl } = useLanguage();
+  const { lang, isRtl } = useLanguage();
   const formattedPrice = (book.priceMillimes / 1000).toFixed(3);
 
   // Subject translation mapping
