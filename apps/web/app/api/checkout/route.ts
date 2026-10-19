@@ -1,6 +1,7 @@
-﻿import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { validateCheckout } from '@/lib/validation';
 import { requireApiSession } from '@/lib/auth';
+import { store } from '@/lib/store';
 import {
   createDurablePurchase,
   attachProviderSession,
@@ -21,13 +22,33 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { bookIds, paymentProvider, idempotencyKey } = validation.data;
+    const { bookIds, paymentProvider, idempotencyKey, childId } = validation.data;
 
     // 2. Fail-closed authentication (SEC-01). userId comes ONLY from the
     //    verified session, never from the request body.
     const auth = await requireApiSession(req);
     if (auth.errorResponse) return auth.errorResponse;
     const userId = auth.user.id;
+
+    // If childId is specified, ensure caller is a parent/admin with active link to child
+    if (childId) {
+      const isParentOrAdmin = auth.user.roles.includes('PARENT') || auth.user.roles.includes('ADMIN');
+      if (!isParentOrAdmin) {
+        return NextResponse.json(
+          { error: 'Seuls les parents ou administrateurs peuvent acheter pour un élève.' },
+          { status: 403 }
+        );
+      }
+      const isLinked = store.parentLinks.some(
+        (l) => l.parentId === userId && l.childId === childId && l.status === 'ACTIVE'
+      );
+      if (!isLinked) {
+        return NextResponse.json(
+          { error: 'Aucun rattachement actif trouvé avec cet élève.' },
+          { status: 403 }
+        );
+      }
+    }
 
     // 3. Create a durable PENDING purchase with server-derived prices
     //    (SEC-04). A pending purchase grants NO paid access; entitlements are

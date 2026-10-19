@@ -23,6 +23,7 @@ export interface EntitlementCheckContext {
     startsAt: Date | string;
     expiresAt: Date | string;
   } | null;
+  linkedParentUserIds?: string[];
 }
 
 export interface AuthorizationResult {
@@ -67,7 +68,11 @@ export function checkBookAccess(ctx: EntitlementCheckContext): AuthorizationResu
     return { allowed: false, code: 403, reason: 'Aucun droit d\'accès actif trouvé pour ce manuel' };
   }
 
-  if (ctx.entitlement.userId !== ctx.userId) {
+  const isOwner =
+    ctx.entitlement.userId === ctx.userId ||
+    Boolean(ctx.linkedParentUserIds && ctx.linkedParentUserIds.includes(ctx.entitlement.userId));
+
+  if (!isOwner) {
     return { allowed: false, code: 403, reason: 'Ce droit d\'accès appartient à un autre compte' };
   }
 

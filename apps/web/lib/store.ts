@@ -1401,7 +1401,7 @@ class TuniEduStore {
 
   hasActiveEntitlement(userId: string, bookId: string, currentInstant?: string): boolean {
     const now = currentInstant || new Date().toISOString();
-    return this.entitlements.some((e) => {
+    const direct = this.entitlements.some((e) => {
       return (
         e.userId === userId &&
         e.bookId === bookId &&
@@ -1410,10 +1410,34 @@ class TuniEduStore {
         now < e.expiresAt
       );
     });
+    if (direct) return true;
+
+    // Check linked parents
+    const parentLinks = this.parentLinks.filter((l) => l.childId === userId && l.status === 'ACTIVE');
+    for (const link of parentLinks) {
+      const parentEnt = this.entitlements.some((e) => {
+        return (
+          e.userId === link.parentId &&
+          e.bookId === bookId &&
+          e.status === 'ACTIVE' &&
+          e.startsAt <= now &&
+          now < e.expiresAt
+        );
+      });
+      if (parentEnt) return true;
+    }
+    return false;
   }
 
   getEntitlement(userId: string, bookId: string): Entitlement | undefined {
-    return this.entitlements.find((e) => e.userId === userId && e.bookId === bookId);
+    const direct = this.entitlements.find((e) => e.userId === userId && e.bookId === bookId);
+    if (direct) return direct;
+    const parentLinks = this.parentLinks.filter((l) => l.childId === userId && l.status === 'ACTIVE');
+    for (const link of parentLinks) {
+      const parentEnt = this.entitlements.find((e) => e.userId === link.parentId && e.bookId === bookId);
+      if (parentEnt) return parentEnt;
+    }
+    return undefined;
   }
 
   /**
@@ -1427,12 +1451,13 @@ class TuniEduStore {
     bookIds: string[];
     paymentProvider: 'FLOUCI' | 'KONNECT' | 'GPG';
     idempotencyKey: string;
+    childId?: string;
   }): { purchase: Purchase; entitlements: Entitlement[]; error?: string } {
     // Check idempotency
     const existing = this.purchases.find((p) => p.idempotencyKey === params.idempotencyKey);
     if (existing) {
       const userEntitlements = this.entitlements.filter((e) =>
-        existing.items.some((item) => item.bookId === e.bookId && e.userId === params.userId)
+        existing.items.some((item) => item.bookId === e.bookId && (e.userId === params.userId || (params.childId && e.userId === params.childId)))
       );
       return { purchase: existing, entitlements: userEntitlements };
     }
@@ -1513,6 +1538,26 @@ class TuniEduStore {
       };
       this.entitlements.push(ent);
       createdEntitlements.push(ent);
+
+      // If childId is specified (e.g. parent buying for child), also grant direct entitlement to child
+      if (params.childId && params.childId !== params.userId) {
+        this.entitlements = this.entitlements.filter(
+          (e) => !(e.userId === params.childId && e.bookId === book.id && e.academicYearId === activeYear.id)
+        );
+        const childEnt: Entitlement = {
+          id: `ent_${Date.now()}_child_${Math.random().toString(36).substring(2, 6)}`,
+          userId: params.childId,
+          bookId: book.id,
+          academicYearId: activeYear.id,
+          status: 'ACTIVE',
+          startsAt: nowIso,
+          expiresAt: activeYear.endsAt,
+          grantedAt: nowIso,
+          purchaseItemId: item.id,
+        };
+        this.entitlements.push(childEnt);
+        createdEntitlements.push(childEnt);
+      }
 
       // Financial Ledger: Gross Sale
       this.ledger.push({

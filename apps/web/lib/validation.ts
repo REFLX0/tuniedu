@@ -59,6 +59,7 @@ export interface CheckoutInput {
   bookIds: string[];
   paymentProvider: 'FLOUCI' | 'KONNECT' | 'GPG';
   idempotencyKey: string;
+  childId?: string;
 }
 
 export function validateCheckout(input: unknown): ValidationResult<CheckoutInput> {
@@ -83,6 +84,7 @@ export function validateCheckout(input: unknown): ValidationResult<CheckoutInput
       bookIds: data.bookIds as string[],
       paymentProvider: data.paymentProvider as CheckoutInput['paymentProvider'],
       idempotencyKey: data.idempotencyKey as string,
+      childId: typeof data.childId === 'string' ? data.childId.trim() : undefined,
     },
   };
 }

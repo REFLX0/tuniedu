@@ -10,7 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { store } from '@/lib/store';
 import { requireApiSession } from '@/lib/auth';
-import { checkProfessorPublishPermission } from '@/lib/authorization';
+import { checkProfessorPublishPermission, checkProfessorBookOwnership } from '@/lib/authorization';
 import {
   createPresignedPutUrl,
   ensureBucket,
@@ -63,6 +63,22 @@ export async function POST(req: NextRequest) {
     const book = store.books.find((b) => b.id === bookId);
     if (!book) {
       return NextResponse.json({ error: 'Manuel introuvable.' }, { status: 404 });
+    }
+
+    // Ownership check (SEC-09): Professor can only attach videos to their own books, unless ADMIN
+    const ownershipCheck = checkProfessorBookOwnership(
+      {
+        id: user.id,
+        name: user.name,
+        roles: user.roles as ('STUDENT' | 'PARENT' | 'PROFESSOR' | 'ADMIN')[],
+        professorProfile: user.professorProfile
+          ? { id: user.professorProfile.id, status: user.professorProfile.status }
+          : null,
+      },
+      book.professorId
+    );
+    if (!ownershipCheck.allowed && !user.roles.includes('ADMIN')) {
+      return NextResponse.json({ error: ownershipCheck.reason }, { status: ownershipCheck.code });
     }
 
     // Mirror the (in-memory) catalog book into Postgres so the VideoContent FK resolves.

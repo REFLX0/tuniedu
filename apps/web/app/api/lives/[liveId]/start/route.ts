@@ -29,6 +29,17 @@ export async function POST(
       return NextResponse.json({ error: 'Session live introuvable.' }, { status: 404 });
     }
 
+    const isLiveOwner =
+      user.roles.includes('ADMIN') ||
+      Boolean(user.professorProfile?.id && user.professorProfile.id === live.professorId) ||
+      user.id === live.professorId;
+    if (!isLiveOwner) {
+      return NextResponse.json(
+        { error: 'Seul l\'enseignant responsable ou un administrateur peut démarrer cette session live.' },
+        { status: 403 }
+      );
+    }
+
     const updatedStore = store.startLiveSession(liveId);
     const updated = (await startLiveRecord(liveId)) || updatedStore;
     const roomName = `live_${liveId}`;

@@ -28,6 +28,17 @@ export async function POST(
       return NextResponse.json({ error: 'Session live introuvable.' }, { status: 404 });
     }
 
+    const isLiveOwner =
+      user.roles.includes('ADMIN') ||
+      Boolean(user.professorProfile?.id && user.professorProfile.id === live.professorId) ||
+      user.id === live.professorId;
+    if (!isLiveOwner) {
+      return NextResponse.json(
+        { error: 'Seul l\'enseignant responsable ou un administrateur peut clôturer cette session live.' },
+        { status: 403 }
+      );
+    }
+
     // Stop LiveKit egress recording if it's running (best-effort).
     const record = await getLiveRecord(liveId);
     if (isEgressConfigured() && record?.egressId) {

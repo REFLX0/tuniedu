@@ -1,17 +1,22 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { store, D17Transaction, User } from '@/lib/store';
 import { useLanguage } from '@/lib/language-context';
 import { AcademicYearEditor } from '@/components/admin/AcademicYearEditor';
 import { LedgerView } from '@/components/admin/LedgerView';
 import { Icons } from '@/components/ui/icons';
 import { runSecurityAcceptanceTests, type TestResult } from '@/lib/sec-tests';
+import { useSession } from '@/components/providers/SessionProvider';
 
 type AdminTab = 'D17' | 'ACCOUNTS' | 'CORPUS' | 'AI_CONFIG' | 'YEARS' | 'SECURITY' | 'LEDGER';
 
 export default function AdminDashboardPage() {
   const { lang } = useLanguage();
+  const { user: currentUser, loading: sessionLoading } = useSession();
+  const isAdmin = currentUser?.roles.includes('ADMIN');
+
   const [activeTab, setActiveTab] = useState<AdminTab>('D17');
 
   // Security test runner state
@@ -50,21 +55,53 @@ export default function AdminDashboardPage() {
     setRanTests(true);
   };
 
-  const handleApproveD17 = (txId: string) => {
-    const res = store.approveD17Transaction(txId);
-    if (res.success) {
-      setD17Txs([...store.d17Transactions]);
-      setActionFeedback(`Transaction ${txId} approuvée avec succès. Droit d'accès élève activé.`);
-      setTimeout(() => setActionFeedback(null), 4000);
+  const handleApproveD17 = async (txId: string) => {
+    try {
+      const apiRes = await fetch(`/api/admin/d17/${txId}/approve`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const data = await apiRes.json().catch(() => ({}));
+      if (apiRes.ok) {
+        store.approveD17Transaction(txId);
+        setD17Txs([...store.d17Transactions]);
+        setActionFeedback(`Transaction ${txId} approuvée avec succès. Droit d'accès élève activé.`);
+        setTimeout(() => setActionFeedback(null), 4000);
+      } else {
+        setActionFeedback(data.error || 'Erreur lors de l\'approbation');
+        setTimeout(() => setActionFeedback(null), 4000);
+      }
+    } catch {
+      const res = store.approveD17Transaction(txId);
+      if (res.success) {
+        setD17Txs([...store.d17Transactions]);
+        setActionFeedback(`Transaction ${txId} approuvée avec succès.`);
+        setTimeout(() => setActionFeedback(null), 4000);
+      }
     }
   };
 
-  const handleRejectD17 = (txId: string) => {
-    const res = store.rejectD17Transaction(txId, 'Numéro de reçu non trouvé dans les relevés CCP');
-    if (res.success) {
-      setD17Txs([...store.d17Transactions]);
-      setActionFeedback(`Transaction ${txId} rejetée.`);
-      setTimeout(() => setActionFeedback(null), 4000);
+  const handleRejectD17 = async (txId: string) => {
+    try {
+      const apiRes = await fetch(`/api/admin/d17/${txId}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ reason: 'Reçu non trouvé dans les relevés CCP' }),
+      });
+      if (apiRes.ok) {
+        store.rejectD17Transaction(txId, 'Numéro de reçu non trouvé dans les relevés CCP');
+        setD17Txs([...store.d17Transactions]);
+        setActionFeedback(`Transaction ${txId} rejetée.`);
+        setTimeout(() => setActionFeedback(null), 4000);
+      }
+    } catch {
+      const res = store.rejectD17Transaction(txId, 'Numéro de reçu non trouvé dans les relevés CCP');
+      if (res.success) {
+        setD17Txs([...store.d17Transactions]);
+        setActionFeedback(`Transaction ${txId} rejetée.`);
+        setTimeout(() => setActionFeedback(null), 4000);
+      }
     }
   };
 
@@ -101,6 +138,47 @@ export default function AdminDashboardPage() {
     }
     return true;
   });
+
+  if (sessionLoading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 py-20 text-center text-slate-500">
+        <div className="w-8 h-8 border-4 border-red-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+        <p className="text-sm">Chargement de la console d'administration...</p>
+      </div>
+    );
+  }
+
+  if (!currentUser || !isAdmin) {
+    return (
+      <div className="max-w-2xl mx-auto my-16 p-8 bg-white rounded-3xl border border-red-200 shadow-xl text-center space-y-5">
+        <div className="w-16 h-16 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center text-2xl mx-auto shadow-xs">
+          🛡️
+        </div>
+        <h2 className="text-2xl font-bold text-slate-900 font-serif">
+          {lang === 'ar' ? 'فضاء خاص بإدارة المنصة' : 'Console d\'Administration Restreinte'}
+        </h2>
+        <p className="text-sm text-slate-600 leading-relaxed">
+          {lang === 'ar'
+            ? 'يتطلب الوصول إلى لوحة تحكم المنصة والمحاسبة والتحقق من الحوالات صلاحيات إدارية عليا.'
+            : 'L\'accès aux paramètres système, à la validation des transactions D17 et à la gestion des comptes requiert des privilèges Administrateur.'}
+        </p>
+        <div className="flex justify-center gap-3 pt-2">
+          <Link
+            href="/connexion?callbackUrl=/admin"
+            className="px-6 py-2.5 rounded-xl bg-red-700 hover:bg-red-800 text-white font-semibold text-xs shadow-md transition"
+          >
+            {lang === 'ar' ? 'تسجيل الدخول كمسؤول' : 'Connexion Administrateur'}
+          </Link>
+          <Link
+            href="/"
+            className="px-6 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-xs transition"
+          >
+            {lang === 'ar' ? 'العودة للرئيسية' : 'Retour à l\'accueil'}
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">

@@ -44,7 +44,6 @@ export async function POST(req: NextRequest) {
     const user = await registerAccount(input);
 
     store.upsertUser(user);
-    store.setCurrentUser(user.id);
 
     const token = await createSessionToken({
       id: user.id,

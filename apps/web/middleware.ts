@@ -4,6 +4,62 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server';
+import { jwtVerify } from 'jose';
+
+const JWT_SECRET_STRING =
+  process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || 'tuniedu_production_jwt_secret_key_2026_secure';
+const JWT_SECRET = new TextEncoder().encode(JWT_SECRET_STRING);
+const JWT_ISSUER = 'tuniedu:auth';
+const JWT_AUDIENCE = 'tuniedu:app';
+
+interface EdgeUser {
+  id: string;
+  roles: string[];
+}
+
+async function getEdgeUser(req: NextRequest): Promise<EdgeUser | null> {
+  const token =
+    req.cookies.get('tuniedu_session')?.value ||
+    (req.headers.get('authorization')?.startsWith('Bearer ')
+      ? req.headers.get('authorization')!.substring(7).trim()
+      : null);
+
+  if (token) {
+    try {
+      const { payload } = await jwtVerify(token, JWT_SECRET, {
+        issuer: JWT_ISSUER,
+        audience: JWT_AUDIENCE,
+      });
+      if (payload.sub) {
+        return {
+          id: payload.sub as string,
+          roles: (payload.roles as string[]) || ['STUDENT'],
+        };
+      }
+    } catch {
+      // invalid or expired token
+    }
+  }
+
+  // Development / test fallback
+  if (process.env.NODE_ENV !== 'production') {
+    const devUserId = req.headers.get('x-user-id');
+    if (devUserId) {
+      return {
+        id: devUserId,
+        roles: devUserId.includes('admin')
+          ? ['ADMIN']
+          : devUserId.includes('prof')
+          ? ['PROFESSOR']
+          : devUserId.includes('parent')
+          ? ['PARENT']
+          : ['STUDENT'],
+      };
+    }
+  }
+
+  return null;
+}
 
 // Edge-runtime compatible sliding-window rate limiter
 const edgeRateLimitCache = new Map<string, { count: number; resetAt: number }>();
@@ -94,10 +150,43 @@ export async function middleware(req: NextRequest) {
     }
   }
 
-  // 2. Prepare Response
+  // 2. Edge RBAC Access Control & Route Perimeter
+  const isProtectedAdmin = pathname === '/admin' || pathname.startsWith('/admin/');
+  const isProtectedProfessor = pathname === '/professor' || pathname.startsWith('/professor/');
+  const isProtectedParent = pathname === '/parent' || pathname.startsWith('/parent/');
+  const isProtectedStudent = pathname === '/student' || pathname.startsWith('/student/');
+  const isProtectedAdminApi = pathname.startsWith('/api/admin');
+
+  if (isProtectedAdmin || isProtectedProfessor || isProtectedParent || isProtectedStudent || isProtectedAdminApi) {
+    const edgeUser = await getEdgeUser(req);
+
+    if (isProtectedAdminApi) {
+      if (!edgeUser || !edgeUser.roles.includes('ADMIN')) {
+        return NextResponse.json({ error: 'Accès administrateur requis.' }, { status: 403 });
+      }
+    } else if (!edgeUser) {
+      const loginUrl = new URL('/connexion', req.url);
+      loginUrl.searchParams.set('callbackUrl', pathname);
+      return NextResponse.redirect(loginUrl);
+    } else if (isProtectedAdmin && !edgeUser.roles.includes('ADMIN')) {
+      const homeUrl = new URL('/', req.url);
+      homeUrl.searchParams.set('error', 'unauthorized_admin');
+      return NextResponse.redirect(homeUrl);
+    } else if (isProtectedProfessor && !edgeUser.roles.includes('PROFESSOR') && !edgeUser.roles.includes('ADMIN')) {
+      const homeUrl = new URL('/', req.url);
+      homeUrl.searchParams.set('error', 'unauthorized_professor');
+      return NextResponse.redirect(homeUrl);
+    } else if (isProtectedParent && !edgeUser.roles.includes('PARENT') && !edgeUser.roles.includes('ADMIN')) {
+      const homeUrl = new URL('/', req.url);
+      homeUrl.searchParams.set('error', 'unauthorized_parent');
+      return NextResponse.redirect(homeUrl);
+    }
+  }
+
+  // 3. Prepare Response
   const res = NextResponse.next();
 
-  // 3. Layer 04 Security Perimeter Headers
+  // 4. Layer 04 Security Perimeter Headers
   res.headers.set('X-Frame-Options', 'DENY');
   res.headers.set('X-Content-Type-Options', 'nosniff');
   res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');

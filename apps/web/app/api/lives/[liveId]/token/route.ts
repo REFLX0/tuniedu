@@ -36,8 +36,12 @@ export async function GET(
       return NextResponse.json({ error: 'Authentification requise pour rejoindre le direct.' }, { status: 401 });
     }
 
-    // Role detection: is broadcaster (professor/admin) or student viewer?
-    const isBroadcaster = user.roles.includes('PROFESSOR') || user.roles.includes('ADMIN');
+    // Role detection: is broadcaster (session owner professor or admin) or viewer?
+    const isOwnerProfessor = Boolean(
+      user.roles.includes('PROFESSOR') &&
+      ((user.professorProfile?.id && user.professorProfile.id === live.professorId) || user.id === live.professorId)
+    );
+    const isBroadcaster = user.roles.includes('ADMIN') || isOwnerProfessor;
     const hasTrimesterAccess = store.hasActiveEntitlement(userId, live.bookId);
 
     if (!isBroadcaster && !hasTrimesterAccess) {

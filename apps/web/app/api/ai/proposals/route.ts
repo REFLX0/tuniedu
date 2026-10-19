@@ -12,11 +12,19 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Utilisateur introuvable.' }, { status: 403 });
     }
 
+    // Role check: Only professors and admins can view proposal queues
+    if (!user.roles.includes('PROFESSOR') && !user.roles.includes('ADMIN')) {
+      return NextResponse.json(
+        { error: 'Accès restreint: seuls les enseignants vérifiés et administrateurs peuvent consulter la file IA.' },
+        { status: 403 }
+      );
+    }
+
     const { searchParams } = new URL(req.url);
     const status = searchParams.get('status') || undefined;
 
-    // Professors see their proposals; Admins see all
-    const teacherId = user.role === 'PROFESSOR' ? user.professorProfile?.id : undefined;
+    // Professors see ONLY their proposals; Admins see all
+    const teacherId = user.roles.includes('ADMIN') ? undefined : (user.professorProfile?.id || user.id);
 
     const proposals = store.getAiCorrectionProposals(teacherId, status);
 

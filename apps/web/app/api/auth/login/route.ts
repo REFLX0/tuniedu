@@ -34,7 +34,6 @@ export async function POST(req: NextRequest) {
 
     // 2. Hydrate the in-memory registry with the authenticated identity.
     store.upsertUser(user);
-    store.setCurrentUser(user.id);
 
     // 3. Issue signed JWT session token
     const token = await createSessionToken({

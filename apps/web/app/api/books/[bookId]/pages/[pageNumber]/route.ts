@@ -23,8 +23,11 @@ export async function GET(
     );
   }
 
-  // Find entitlement
+  // Find entitlement (direct or inherited from linked parent)
   const entitlement = store.getEntitlement(user.id, bookId);
+  const activeParentLinks = store.parentLinks
+    .filter((l) => l.childId === user.id && l.status === 'ACTIVE')
+    .map((l) => l.parentId);
 
   // Authorization check (SEC-02, SEC-03, SEC-12)
   const authCheck = checkBookAccess({
@@ -40,6 +43,7 @@ export async function GET(
           expiresAt: entitlement.expiresAt,
         }
       : null,
+    linkedParentUserIds: activeParentLinks,
   });
 
   if (!authCheck.allowed) {

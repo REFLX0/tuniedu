@@ -365,7 +365,7 @@ export async function confirmPurchasePayment(
         grantedEntitlements.push({
           id: entitlement.id,
           bookId: entitlement.bookId,
-          academicYearId: entitlement.academicYearId,          expiresAt: entitlement.expiresAt,
+          academicYearId: entitlement.academicYearId, expiresAt: entitlement.expiresAt,
         });
 
         const commission = calculateCommission(item.lineTotalMillimes, PLATFORM_COMMISSION_BPS);

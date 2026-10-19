@@ -32,8 +32,10 @@ const TUNISIAN_BANKS = [
 
 export default function ProfessorStudioPage() {
   const { lang } = useLanguage();
-  const { user: currentUser } = useSession();
-  const professorId = currentUser?.professorProfile?.id || 'prof_hichem_profile';
+  const { user: currentUser, loading: sessionLoading } = useSession();
+  const isProfessor = currentUser?.roles.includes('PROFESSOR') || currentUser?.roles.includes('ADMIN');
+  const professorId = currentUser?.professorProfile?.id || (isProfessor ? currentUser?.id : null) || '';
+  const isVerified = currentUser?.professorProfile?.status === 'VERIFIED' || currentUser?.roles.includes('ADMIN');
   const [activeTab, setActiveTab] = useState<'MANUSCRIPTS' | 'VIDEOS' | 'LIVES' | 'LEDGER' | 'AI_QUEUE'>('MANUSCRIPTS');
   const pendingAiCount = store.aiProposals.filter((p) => p.status === 'PENDING_REVIEW').length;
 
@@ -61,6 +63,7 @@ export default function ProfessorStudioPage() {
 
   // Hydrate durable (Postgres) video records for this professor on mount.
   useEffect(() => {
+    if (!professorId) return;
     fetch(`/api/videos?professorId=${encodeURIComponent(professorId)}`, { credentials: 'include' })
       .then((res) => res.json())
       .then((data) => {
@@ -71,6 +74,7 @@ export default function ProfessorStudioPage() {
 
   // Hydrate durable (Postgres) live sessions for this professor.
   const hydrateLives = useCallback(() => {
+    if (!professorId) return;
     fetch(`/api/lives/upcoming?professorId=${encodeURIComponent(professorId)}`, {
       credentials: 'include',
     })
@@ -105,9 +109,66 @@ export default function ProfessorStudioPage() {
     );
   };
 
+  if (sessionLoading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 py-20 text-center text-slate-500">
+        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+        <p className="text-sm">Chargement du studio enseignant...</p>
+      </div>
+    );
+  }
+
+  if (!currentUser || !isProfessor) {
+    return (
+      <div className="max-w-2xl mx-auto my-16 p-8 bg-white rounded-3xl border border-red-100 shadow-xl text-center space-y-5">
+        <div className="w-16 h-16 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center text-2xl mx-auto shadow-xs">
+          🔒
+        </div>
+        <h2 className="text-2xl font-bold text-slate-900 font-serif">
+          {lang === 'ar' ? 'فضاء مخصص للأساتذة المعتمدين' : 'Studio réservé aux Enseignants Agréés'}
+        </h2>
+        <p className="text-sm text-slate-600 leading-relaxed">
+          {lang === 'ar'
+            ? 'يتطلب الدخول إلى فضاء النشر والبث حساب أستاذ موثق من طرف وزارة التربية. يرجى تسجيل الدخول بحساب أستاذ أو تقديم طلب اعتماد.'
+            : 'L\'accès aux outils d\'édition, de diffusion vidéo et de direct WebRTC est réservé aux enseignants vérifiés du Ministère. Veuillez vous connecter avec un compte Enseignant.'}
+        </p>
+        <div className="flex justify-center gap-3 pt-2">
+          <Link
+            href="/connexion?callbackUrl=/professor"
+            className="px-6 py-2.5 rounded-xl bg-blue-700 hover:bg-blue-800 text-white font-semibold text-xs shadow-md transition"
+          >
+            {lang === 'ar' ? 'تسجيل الدخول كأستاذ' : 'Connexion Enseignant'}
+          </Link>
+          <Link
+            href="/"
+            className="px-6 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-xs transition"
+          >
+            {lang === 'ar' ? 'العودة للرئيسية' : 'Retour à l\'accueil'}
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-      
+      {/* Verification Notice Banner if Pending */}
+      {!isVerified && (
+        <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 flex items-start gap-3 text-amber-950 text-xs">
+          <span className="text-lg">⏳</span>
+          <div className="space-y-1">
+            <span className="font-bold">
+              {lang === 'ar' ? 'ملف الأستاذ قيد التحقق الإداري' : 'Profil enseignant en cours de vérification administrative'}
+            </span>
+            <p className="text-amber-900/90 leading-relaxed">
+              {lang === 'ar'
+                ? 'ملفكم قيد المراجعة من طرف المفتشية البيداغوجية. ستتمكنون من نشر الدروس والكتب والبدء في البث المباشر فور اعتماد المعطيات.'
+                : 'Votre profil est en cours de validation par l\'inspection pédagogique. La publication de manuels et la programmation de directs seront actives dès l\'approbation de vos pièces justificatives.'}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Studio Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-blue-100">
         <div>
@@ -115,13 +176,19 @@ export default function ProfessorStudioPage() {
             <span className="text-xs font-bold text-blue-700 uppercase tracking-wider">
               {lang === 'ar' ? 'فضاء الأستاذ المؤلف والمدرب' : 'Studio Auteur & Enseignant'}
             </span>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-900 border border-blue-200 flex items-center gap-1 shadow-xs">
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border flex items-center gap-1 shadow-xs ${
+              isVerified
+                ? 'bg-blue-50 text-blue-900 border-blue-200'
+                : 'bg-amber-50 text-amber-900 border-amber-200'
+            }`}>
               <Icons.CheckCircle className="w-3 h-3 text-blue-700" />
-              {lang === 'ar' ? 'مدرّس معتمد وموثق' : 'Statut Vérifié'}
+              {isVerified
+                ? (lang === 'ar' ? 'مدرّس معتمد وموثق' : 'Statut Vérifié')
+                : (lang === 'ar' ? 'قيد التدقيق' : 'En attente')}
             </span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold text-slate-950 font-serif tracking-tight mt-1">
-            Prof. Hichem Ben Salem — Espace Édition & Diffusion
+            {currentUser?.name || 'Professeur'} — Espace Édition & Diffusion
           </h1>
           <p className="text-xs text-slate-500 mt-1">
             Gérez vos manuels scolaires (PDF), vos vidéos pédagogiques (HLS) et vos séances interactives en direct (WebRTC).

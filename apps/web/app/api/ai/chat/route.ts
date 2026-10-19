@@ -31,6 +31,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'La question ne peut pas être vide.' }, { status: 400 });
     }
 
+    // Entitlement verification: If asking about a specific book, verify the user has access
+    if (bookId && !user.roles.includes('ADMIN') && !user.roles.includes('PROFESSOR')) {
+      const hasAccess = store.hasActiveEntitlement(user.id, bookId);
+      if (!hasAccess) {
+        return NextResponse.json(
+          {
+            error: 'Accès réservé: un abonnement actif à ce manuel est requis pour solliciter le tuteur pédagogique IA.',
+            code: 'ENTITLEMENT_REQUIRED',
+          },
+          { status: 403 }
+        );
+      }
+    }
+
     // 3. Persist Student's Prompt
     store.addAiMessage({
       userId: user.id,

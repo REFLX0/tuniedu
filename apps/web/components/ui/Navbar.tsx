@@ -59,40 +59,170 @@ export function Navbar() {
     }
   };
 
-  const navPills = [
-    {
-      href: '/professor',
-      labelAr: 'إنشاء وثيقة',
-      labelFr: 'Créer document',
-      icon: Icons.FileText,
-      badge: 'PRO',
-    },
-    {
-      href: '/student/library',
-      labelAr: 'وثائقي ومكتبتي',
-      labelFr: 'Mes documents',
-      icon: Icons.BookOpen,
-    },
-    {
-      href: '/catalogue',
-      labelAr: 'دروس جاهزة',
-      labelFr: 'Cours & Manuels',
-      icon: Icons.Book,
-    },
-    {
-      href: '/checkout?bookId=book_math_9b',
-      labelAr: 'الاشتراكات',
-      labelFr: 'Abonnements',
-      icon: Icons.ShieldAlert, // Lightning bolt style
-      isHighlight: true,
-    },
-    {
-      href: '/parent',
-      labelAr: 'فضاء الأولياء',
-      labelFr: 'Espace Parents',
-      icon: Icons.Users,
-    },
-  ];
+  interface NavPillItem {
+    href: string;
+    labelAr: string;
+    labelFr: string;
+    icon: any;
+    badge?: string;
+    isHighlight?: boolean;
+  }
+
+  const getNavPills = (): NavPillItem[] => {
+    if (!currentUser) {
+      return [
+        {
+          href: '/catalogue',
+          labelAr: 'دليل المناهج',
+          labelFr: 'Catalogue des Manuels',
+          icon: Icons.Book,
+        },
+        {
+          href: '/student/videos',
+          labelAr: 'الدروس المصورة',
+          labelFr: 'Cours Vidéos',
+          icon: Icons.Play,
+        },
+        {
+          href: '/student/live',
+          labelAr: 'حصص المباشر',
+          labelFr: 'Séances Directs',
+          icon: Icons.Video,
+        },
+        {
+          href: '/checkout?bookId=book_math_9b',
+          labelAr: 'الاشتراكات الرسمية',
+          labelFr: 'Abonnements',
+          icon: Icons.ShieldAlert,
+          isHighlight: true,
+        },
+      ];
+    }
+
+    if (currentUser.roles.includes('ADMIN')) {
+      return [
+        {
+          href: '/admin',
+          labelAr: 'لوحة الإدارة',
+          labelFr: 'Console Admin',
+          icon: Icons.ShieldCheck,
+          badge: 'ADMIN',
+          isHighlight: true,
+        },
+        {
+          href: '/catalogue',
+          labelAr: 'الكتب والمحتوى',
+          labelFr: 'Manuels & CNP',
+          icon: Icons.Book,
+        },
+        {
+          href: '/professor',
+          labelAr: 'فضاء الأساتذة',
+          labelFr: 'Studio Auteurs',
+          icon: Icons.FileText,
+        },
+        {
+          href: '/parent',
+          labelAr: 'فضاء الأولياء',
+          labelFr: 'Espace Parents',
+          icon: Icons.Users,
+        },
+      ];
+    }
+
+    if (currentUser.roles.includes('PROFESSOR')) {
+      return [
+        {
+          href: '/professor',
+          labelAr: 'الأستاذ المؤلف',
+          labelFr: 'Studio Enseignant',
+          icon: Icons.FileText,
+          badge: 'PRO',
+          isHighlight: true,
+        },
+        {
+          href: '/catalogue',
+          labelAr: 'الكتب والبرامج',
+          labelFr: 'Manuels Officiels',
+          icon: Icons.Book,
+        },
+        {
+          href: '/student/live',
+          labelAr: 'البث والمباشر',
+          labelFr: 'Séances Directs',
+          icon: Icons.Video,
+        },
+        {
+          href: '/community',
+          labelAr: 'الملتقى التربوي',
+          labelFr: 'Communauté',
+          icon: Icons.Users,
+        },
+      ];
+    }
+
+    if (currentUser.roles.includes('PARENT')) {
+      return [
+        {
+          href: '/parent',
+          labelAr: 'فضاء الولي',
+          labelFr: 'Suivi de mes enfants',
+          icon: Icons.Users,
+          badge: 'PARENT',
+          isHighlight: true,
+        },
+        {
+          href: '/catalogue',
+          labelAr: 'الاشتراكات والكتب',
+          labelFr: 'Catalogue & Abonnements',
+          icon: Icons.Book,
+        },
+        {
+          href: '/student/live',
+          labelAr: 'حصص المراجعة',
+          labelFr: 'Séances en Direct',
+          icon: Icons.Video,
+        },
+      ];
+    }
+
+    // Default: STUDENT
+    return [
+      {
+        href: '/student',
+        labelAr: 'فضاء التلميذ',
+        labelFr: 'Mon Espace',
+        icon: Icons.Sparkles,
+        isHighlight: true,
+      },
+      {
+        href: '/student/library',
+        labelAr: 'مكتبتي الرقمية',
+        labelFr: 'Mes Manuels',
+        icon: Icons.BookOpen,
+      },
+      {
+        href: '/student/videos',
+        labelAr: 'شروح الفيديو',
+        labelFr: 'Cours Vidéos',
+        icon: Icons.Play,
+      },
+      {
+        href: '/student/live',
+        labelAr: 'حصص المباشر',
+        labelFr: 'Directs & Révision',
+        icon: Icons.Video,
+      },
+      {
+        href: '/student/progress',
+        labelAr: 'تماريني ونتائجي',
+        labelFr: 'Mon Progrès',
+        icon: Icons.BarChart,
+      },
+    ];
+  };
+
+  const navPills = getNavPills();
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-xs transition-all">
